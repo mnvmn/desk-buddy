@@ -128,6 +128,25 @@ Consequences that must hold for the device to ever connect:
 > must be documented on the setup page and surfaced as a distinct error
 > state (§7).
 
+### 3.1.1 Router MAC whitelist (access management — not security)
+
+The ESP32-C6 Wi-Fi MAC is **factory-burned in eFuse and stable across
+reboots** (do **not** enable ESP-IDF random-MAC-for-privacy — it would
+break any whitelist). If the router uses a MAC whitelist:
+
+1. Flash + power the board; read the MAC from the serial boot log
+   (`WiFi.macAddress()` / `esp_efuse_mac_get_default()`).
+2. Add it to the router whitelist **once**. The whitelist only gates the
+   final `WiFi.begin()` association — it never interacts with provisioning
+   (§8), which runs before the device is on the LAN.
+3. Edge case: if the MAC can't be read (bad flash / wrong port),
+   temporarily disable MAC filtering, provision over serial, re-enable.
+
+**Security note:** MAC whitelisting is *access management*, not a security
+control — MACs are trivially spoofable and it provides no encryption.
+**WPA2/WPA3 must stay on** on the SSID; that is the actual door lock. The
+whitelist is a doormat, not a lock. Documented as such.
+
 ### 3.2 Endpoints used
 
 Primary — **`GET /slots`** (enabled **by default**, no extra server flag).
@@ -273,8 +292,15 @@ framebuffer. Keep chrome minimal; the panel is the content.
 
 ### 6.5 Boot
 - ~300 ms: "DeskBuddy" splash, then straight to Live mode.
-- No pairing flow in MVP (Wi-Fi creds burned in at build / first flash,
-  §8).
+- **First boot (not yet provisioned, §8):** no splash → straight to the
+  **Wi-Fi setup screen**: scan list → pick SSID → `lv_keyboard` for the
+  passphrase → save to NVS → 10 s connection test → Live mode. Reboots
+  with bad creds return here (with a "bad password" note). After a
+  successful save, setup is never shown again unless the user holds KEY
+  for 3 s (resets the provisioned flag, §B11).
+- The touch panel (CST9220) is used for list selection + keyboard; the
+  KEY button also works as a down/back key so setup is completable
+  without touching the glass.
 
 ---
 
@@ -291,7 +317,8 @@ framebuffer. Keep chrome minimal; the panel is the content.
 | B7 | Endpoint unreachable → `OFFLINE_SERVER`; Wi-Fi down → `OFFLINE_WIFI`; both override the screen and throttle to 5 s retries. |
 | B8 | On returning to `OK`, refresh immediately and restore the pre-error mode. |
 | B9 | If `/slots` returns a parse error (schema drift), treat as `OFFLINE_SERVER` and keep retrying — do not crash. |
-| B10 | If the server was started with `--metrics` and `/metrics` returns 200, the device *may* prefer the `predicted_tokens_seconds` gauge for a smoother tok/s (optional, non-blocking). |
+| B10 | The `/metrics` `predicted_tokens_seconds` gauge is a **lagging session-average** (verified 2026-09-19: reads 0 during generation, value after). Use it only as a **cross-check / session avg** — **never** as the live display number. The live number is always the derived `/slots` value (B5). |
+| B11 | **On-panel Wi-Fi setup** (first boot / unprovisioned, §6.5): scan (10 s budget) → SSID list → `lv_keyboard` passphrase → NVS save → connection test (10 s). Success → provisioned flag set → Live mode. Failure → stay on setup with error note. **KEY held 3 s** (debounced, from Live mode) re-enters setup by clearing the provisioned flag. Touch + KEY both work as input. |
 
 ---
 
@@ -301,8 +328,9 @@ Stored in NVS so it survives reboots and can be changed without reflashing.
 
 | Key | Default | Notes |
 |---|---|---|
-| `wifi.ssid` | (burned in at first flash) | |
-| `wifi.pswd` | (burned in at first flash) | |
+| `wifi.provisioned` | `false` | `true` after a successful on-panel setup (B11). `false` → boot goes to the setup screen. |
+| `wifi.ssid` | (none) | Set by the on-panel setup screen (B11); fallback: serial provision helper (below). |
+| `wifi.pswd` | (none) | Same. Plaintext in NVS is acceptable: LAN-local cred, physical flash access is the trust boundary (documented §9). |
 | `llama.host` | `m.tower1` (or its LAN IP) | **LAN IP/hostname, not 127.0.0.1.** Probe-confirmed target. |
 | `llama.port` | `11444` | |
 | `poll_ms_working` | `500` | |
@@ -310,8 +338,20 @@ Stored in NVS so it survives reboots and can be changed without reflashing.
 | `screensaver.imgA` | built-in default | picture for "working" |
 | `screensaver.imgB` | built-in default | picture for "idle" |
 
-- First-flash provisioning: a small `tools/provision` helper (or a serial
-  menu) sets SSID/PSWD/host. No Wi-Fi picker UI on the panel in MVP.
+**Provisioning paths (in priority order):**
+
+1. **On-panel Wi-Fi setup screen** (B11) — primary, zero-cable: the 480×480
+   touch panel + LVGL scan list + `lv_keyboard` do the whole job. This is
+   why §12 no longer excludes a Wi-Fi UI — on a strip display it wouldn't
+   fit; on this panel it's the natural setup path.
+2. **Serial provision helper** (`tools/provision`) — fallback for a
+   blank/bricked-in-setup panel: a small CLI over USB-CDC sets
+   `wifi.ssid` / `wifi.pswd` / `llama.host`. Shares the boot-log link
+   already used for screenshot capture.
+
+- No BLE/softAP provisioning: the on-panel screen makes both unnecessary
+   (BLE is infeasible as a drop-in on the C6 anyway — Arduino's `WiFiProv`
+   BLE transport is ESP32/Bluedroid-only; the C6 uses NimBLE). See §13.
 - All numeric knobs have sane bounds (poll interval clamped 200 ms–10 s).
 
 ---
@@ -327,29 +367,42 @@ Stored in NVS so it survives reboots and can be changed without reflashing.
 | Firmware | Arduino (arduino-esp32 ≥ 3.3.0) **or** ESP-IDF (v5.5.x) build. C++ is fine; keep the HTTP + JSON path tiny and dependency-light. Start from Waveshare's bundled `09_LVGL_V9_Test` Arduino example (it already initializes display + touch correctly). |
 | Build/flash | One command flashes the board. `platformio.ini` **or** an Arduino `.ino` project **or** ESP-IDF at repo root — pick one, document the FQBN/partition (`esp32c6, FlashSize=16M, app3M_fat9M_16MB`). |
 | Testability | The state machine (`BuddyState` transitions, tok/s math, error handling) must be unit-testable **without** hardware — pure logic, I/O injected. This is the part worth testing. |
-| Security | Plain HTTP on a trusted LAN in MVP. No secrets transmitted by the device other than the (LAN-local) Wi-Fi creds. Acceptable; documented. |
+| Security | WPA2/WPA3 required on the SSID (the real door lock). Plain HTTP to the
+  LAN `llama-server` otherwise — trusted local network, no remote surface.
+  Wi-Fi passphrase stored in plaintext NVS: LAN-local cred, physical
+  flash access is the trust boundary. MAC whitelisting (§3.1.1) is access
+  management only — MACs are spoofable; do not treat it as security. |
 
 ---
 
 ## 10. Repo layout (proposed)
 
 ```
-deskbuddy/
-├── PRODUCT_SPEC.md          # this file
-├── README.md                # setup: bind 0.0.0.0, set LAN IP, flash, FQBN
-├── firmware/                # Arduino or PlatformIO project (start from Waveshare 09_LVGL_V9_Test)
-│   ├── src/
-│   │   ├── buddy_state.c    # state machine + tok/s math (unit-testable)
-│   │   ├── poller.c         # HTTP GET /slots (+ optional /metrics)
-│   │   ├── ui.c             # LVGL Live / screensaver / error screens
-│   │   ├── button.c         # KEY debounce + press detect
-│   │   ├── display_bsp.c    # wraps Waveshare sh8601 init (4-bit, pins §2.2)
-│   │   └── config.c         # NVS load/save
-│   └── assets/              # default 480×480 RGB565 bitmaps (imgA, imgB)
-├── tools/
-│   ├── provision/           # set Wi-Fi creds + host (serial or helper)
-│   └── img2buddy/           # convert a 480×480 PNG → RGB565 .bin for the panel
-└── tests/                   # host-side unit tests for buddy_state.c
+desk-buddy/
+├── README.md                # project overview + map
+├── shared/
+│   ├── API_ENDPOINTS.md     # live endpoint/field reference (both targets)
+│   └── tools/probe.sh       # one-command server re-verify
+├── esp32c6_480x480/
+│   ├── PRODUCT_SPEC.md      # this file
+│   ├── firmware/            # Arduino or PlatformIO project (start from Waveshare 09_LVGL_V9_Test)
+│   │   └── src/
+│   │       ├── buddy_state.c    # state machine + tok/s math (unit-testable)
+│   │       ├── poller.c         # HTTP GET /slots (+ optional /metrics)
+│   │       ├── setup_ui.c       # M1.5 on-panel Wi-Fi setup (B11): scan list + lv_keyboard
+│   │       ├── ui.c             # LVGL Live / screensaver / error screens
+│   │       ├── button.c         # KEY debounce + press detect
+│   │       ├── display_bsp.c    # wraps Waveshare sh8601 init (4-bit, pins §2.2)
+│   │       └── config.c         # NVS load/save
+│   │   └── assets/              # default 480×480 RGB565 bitmaps (imgA, imgB)
+│   └── tools/
+│       ├── provision/           # set Wi-Fi creds + host (serial or helper)
+│       └── img2buddy/           # convert a 480×480 PNG → RGB565 .bin for the panel
+├── widget/
+│   ├── WINDOWS_WIDGET_SPEC.md  # the PySide6 sibling
+│   └── widget/                # PySide6 app (see its spec §9)
+├── wiki/                    # compiled reference docs (code-wiki layout)
+└── tests/                   # host-side unit tests for buddy_state
 ```
 
 ---
@@ -358,9 +411,18 @@ deskbuddy/
 
 **M1 — Skeleton (proves connectivity)**
 - Reuse Waveshare's LVGL bring-up to get a panel on, then add a Wi-Fi +
-  `/slots` poller that logs `working/tok-s` to serial.
+  `/slots` poller that logs `working/tok-s` to serial. Wi-Fi creds via the
+  serial provision helper (fallback path, §8) — good enough to prove the
+  loop.
 - *Exit:* serial shows live tok/s while a chat generates, `idle` when it
   stops. (Also proves the `0.0.0.0` binding works.)
+
+**M1.5 — On-panel Wi-Fi setup (zero-cable first boot)**
+- The setup screen from B11: scan list + `lv_keyboard` + NVS save +
+  connection test; `wifi.provisioned` flag; KEY-held-3 s re-entry. Touch
+  (CST9220) input wired up here for the first time.
+- *Exit:* fresh flash → no cables → panel sets up the network by hand;
+  serial helper still works as fallback.
 
 **M2 — Live screen**
 - Render tok/s + idle on the 480×480 AMOLED. Error states for server/wifi
@@ -375,7 +437,8 @@ deskbuddy/
 
 **M4 — Polish (post-MVP)**
 - Optional `/metrics`-gauge path for a smoother number (B10).
-- Touch (CST9220) tap-anywhere as an alternate toggle.
+- Touch (CST9220) tap-anywhere as an alternate to the KEY toggle (touch
+  itself is already in use from M1.5 onward).
 - Image swapping without reflash (resolve the LCD/SD pin-mux first, §2.2).
 - RTC-driven clock + "time since last request" on idle.
 - Battery/low-power idle (AMOLED blanking) if ever run on the LiPo version.
@@ -389,7 +452,10 @@ deskbuddy/
 - TLS/mTLS to the server.
 - Voice, sound, IMU, or any non-display feedback (audio/IMU/RTC are on the
   board but unused in MVP).
-- A Wi-Fi configuration UI on the panel itself.
+- Wi-Fi configuration over **BLE or soft-AP**: the on-panel setup screen
+  (B11) supersedes both. (Also technically moot for BLE: the Arduino
+  `WiFiProv` BLE transport is ESP32/Bluedroid-only; the C6 uses NimBLE —
+  a hand-rolled GATT service would be more effort than the panel UI.)
 - Prompt-processing speed (only *generation* tok/s is shown in MVP).
 
 ---
@@ -410,3 +476,7 @@ deskbuddy/
    the reference examples make display+touch nearly free.
 5. **Screensaver images** — any preference for the two default pictures,
    or should I pick/generate placeholders?
+6. **Touch bring-up (M1.5)** — does Waveshare's `09_LVGL_V9_Test` already
+   wire CST9220 into LVGL (making the setup screen's input path nearly
+   free), or do we need to init the touch controller ourselves in M1.5?
+   Check the bundled example before estimating M1.5 effort.
