@@ -1,0 +1,363 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>DeskBuddy — Scene mode designs</title>
+<style>
+  body { font: 13.5px/1.55 ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--foreground); }
+  h1 { font-size: 17px; margin: 0 0 4px; }
+  h2 { font-size: 14.5px; margin: 26px 0 4px; color: var(--foreground); }
+  h2 .num { color: var(--accent); }
+  .desc { color: var(--muted-foreground); margin: 0 0 12px; max-width: 740px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 6px; }
+  .fig { text-align: center; }
+  .card { width: 320px; height: 190px; border-radius: 14px; overflow: hidden; position: relative;
+          background: rgba(30,30,34,0.94); border: 1px solid rgba(255,255,255,0.11); }
+  .card.dev { width: 128px; height: 64px; border-radius: 8px; }
+  canvas { display: block; image-rendering: pixelated; }
+  .cap { color: var(--muted-foreground); font-size: 11px; margin-top: 5px; letter-spacing: 0.06em; }
+  .tg { position: absolute; right: 8px; bottom: 8px; width: 11px; height: 11px; border-radius: 3px;
+        background: linear-gradient(135deg, #aab4c9 0 50%, #3a4152 50% 100%);
+        border: 1px solid rgba(255,255,255,0.25); cursor: pointer; }
+  .note { border-left: 3px solid var(--accent); padding: 6px 12px; margin: 20px 0; color: var(--muted-foreground);
+          background: var(--card); border-radius: 0 8px 8px 0; max-width: 740px; }
+  .data { position: absolute; left: 0; right: 0; bottom: 0; height: 126px; padding: 10px 16px;
+          box-sizing: border-box; font-family: inherit; }
+  .data .big { font-size: 34px; color: #4ec9b0; line-height: 1; }
+  .data .sub { font-size: 12px; color: #9aa0aa; }
+  .data .model { position: absolute; right: 16px; top: 10px; font-size: 11px; color: #f2f3f5; }
+  .data .left { font-size: 12px; color: #9aa0aa; margin-top: 8px; }
+  .data .spark { font-size: 11px; color: #4ec9b0; letter-spacing: -1px; margin-top: 6px; }
+  .data .host { position: absolute; left: 16px; bottom: 6px; font-size: 9.5px; color: #5f656f; }
+  .data.dim .big { color: #f2f3f5; } .data.dim .sub { color: #7a808a; }
+  .data.dim .model { color: #9aa0aa; } .data.dim .left { color: #5f656f; }
+  .rec { color: var(--foreground); font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>DeskBuddy — scene mode (button switches card ⇄ scene)</h1>
+<p class="desc">
+  A <span class="tg" style="position:static;display:inline-block;vertical-align:-1px" title="mode toggle"></span>
+  button (bottom-right corner + right-click menu item) swaps the data card for a full-card pixel scene.
+  Same two states as today: <b style="color:#4ec9b0">working</b> (Generating/Prompting) vs <b>idle</b> (Idle/Down → idle scene with a red corner tick for Down).
+  Scenes are drawn on a small integer grid, so the <b>exact same bitmap</b> fits the device screen — each concept shows a 128×64 "device" render.
+</p>
+
+<div class="note">
+  <b>References from the web:</b> Star Office UI (pixel character changes activity with agent status), RunCat/zoomies
+  (menu-bar pet: rests when calm, sprints under load), and the "pixel pet" rule of thumb — spend the animation budget on the
+  <i>idle</i> loop, that's the state you see 90% of the time. Note on Mario: shipped apps shouldn't embed Nintendo sprites
+  (copyright), so concept 1 uses an original "plumber" character in the same palette instead.
+</div>
+
+<!-- 1: Plumber -->
+<h2><span class="num">1</span> · Plumber's run <span class="rec" style="font-weight:normal;color:var(--accent)">← my pick: closest to your idea, strongest busy/idle contrast</span></h2>
+<p class="desc">Day: a red-hat plumber sprints past pipes, coins and a ? block. Night: same level, moon out, character standing still with a Z — instantly readable as "done / asleep".</p>
+<div class="row">
+  <div class="fig"><div class="card"><canvas id="c1w" width="320" height="190"></canvas><div class="tg" title="toggle mode"></div></div><div class="cap">WORKING</div></div>
+  <div class="fig"><div class="card"><canvas id="c1i" width="320" height="190"></canvas><div class="tg" title="toggle mode"></div></div><div class="cap">IDLE (night)</div></div>
+  <div class="fig"><div class="card dev"><canvas id="c1d" width="128" height="64"></canvas></div><div class="cap">DEVICE 128×64</div></div>
+</div>
+
+<!-- 2: Valley -->
+<h2><span class="num">2</span> · Valley, pure landscape</h2>
+<p class="desc">No character. Morning: sun, windmill spinning, birds, path over the hills. Night: full moon over a still lake with a light column — calm by definition. Safest "serene" option.</p>
+<div class="row">
+  <div class="fig"><div class="card"><canvas id="c2w" width="320" height="190"></canvas><div class="tg" title="toggle mode"></div></div><div class="cap">WORKING (morning)</div></div>
+  <div class="fig"><div class="card"><canvas id="c2i" width="320" height="190"></canvas><div class="tg" title="toggle mode"></div></div><div class="cap">IDLE (night lake)</div></div>
+  <div class="fig"><div class="card dev"><canvas id="c2d" width="128" height="64"></canvas></div><div class="cap">DEVICE 128×64</div></div>
+</div>
+
+<!-- 3: Robot desk -->
+<h2><span class="num">3</span> · Robot at the desk</h2>
+<p class="desc">The model as a little robot: working = typing at a glowing green terminal, coffee steaming; idle = eyes closed, monitor off, a cat asleep on the desk. "My server has an office" (Star Office UI energy, one character, tiny scene).</p>
+<div class="row">
+  <div class="fig"><div class="card"><canvas id="c3w" width="320" height="190"></canvas><div class="tg" title="toggle mode"></div></div><div class="cap">WORKING</div></div>
+  <div class="fig"><div class="card"><canvas id="c3i" width="320" height="190"></canvas><div class="tg" title="toggle mode"></div></div><div class="cap">IDLE</div></div>
+  <div class="fig"><div class="card dev"><canvas id="c3d" width="128" height="64"></canvas></div><div class="cap">DEVICE 128×64</div></div>
+</div>
+
+<!-- 4: Sea -->
+<h2><span class="num">4</span> · The voyage</h2>
+<p class="desc">Working: boat sailing, choppy crests, gulls, sun. Idle: night sea, flat water, moon reflection, boat moored with a warm lantern. The motion-vs-stillness contrast is in the water itself.</p>
+<div class="row">
+  <div class="fig"><div class="card"><canvas id="c4w" width="320" height="190"></canvas><div class="tg" title="toggle mode"></div></div><div class="cap">WORKING</div></div>
+  <div class="fig"><div class="card"><canvas id="c4i" width="320" height="190"></canvas><div class="tg" title="toggle mode"></div></div><div class="cap">IDLE</div></div>
+  <div class="fig"><div class="card dev"><canvas id="c4d" width="128" height="64"></canvas></div><div class="cap">DEVICE 128×64</div></div>
+</div>
+
+<!-- 5: Hybrid -->
+<h2><span class="num">5</span> · Hybrid — scene banner over the data card</h2>
+<p class="desc">If you don't want to lose the numbers: a 64px scene strip on top, data card underneath (same layout as today). More to build, but "scene mode" never costs you the tok/s.</p>
+<div class="row">
+  <div class="fig"><div class="card">
+    <canvas id="c5w" width="320" height="64"></canvas>
+    <div class="data"><div class="model">Qwen3.8-27B</div><div class="big">127.4</div><div class="sub">tok/s</div>
+      <div class="left">~15s left · 1847 tok</div><div class="spark">▂▃▅▇▆▄▇█</div>
+      <div class="host">m.tower1:11444</div></div>
+    <div class="tg" title="toggle mode"></div>
+  </div><div class="cap">WORKING</div></div>
+  <div class="fig"><div class="card">
+    <canvas id="c5i" width="320" height="64"></canvas>
+    <div class="data dim"><div class="model">Qwen3.8-27B</div><div class="big">—</div><div class="sub">idle</div>
+      <div class="left">loaded · ready</div>
+      <div class="host">m.tower1:11444</div></div>
+    <div class="tg" title="toggle mode"></div>
+  </div><div class="cap">IDLE</div></div>
+</div>
+
+<div class="note">
+  Interaction plan (fits the existing M3 scope): <b>button</b> = small corner glyph + right-click menu item
+  <i>Show: Data / Scene</i>; double-click could toggle it too. Choice persists in the same config as size_mode/pos.
+  Working state = Generating <i>or</i> Prompting (amber tint variant for prompting is a free extra). Down keeps the scene with a red corner tick + "server down" so you still see the error.
+</div>
+
+<script>
+// ---------- pixel painter ----------
+function makePainter(canvas, cell){
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const g = {
+    W: canvas.width/cell, H: canvas.height/cell,
+    rect(x,y,w,h,c){ x=Math.round(x); y=Math.round(y); w=Math.round(w); h=Math.round(h);
+      if(x<0)w+=x,x=0; if(y<0)h+=y,y=0;
+      ctx.fillStyle=c; ctx.fillRect(x*cell,y*cell,w*cell,h*cell); },
+    px(x,y,c){ g.rect(x,y,1,1,c); },
+  };
+  return g;
+}
+function circle(g,cx,cy,r,c){
+  for(let y=-r;y<=r;y++) for(let x=-r;x<=r;x++){
+    const d=x*x+y*y;
+    if(d<=r*r-(r>>1)) g.px(cx+x,cy+y,c);
+  }
+}
+function diag(g,x,y,dx,dy,c,steps){
+  steps=steps||8;
+  for(let i=0;i<=steps;i++) g.px(Math.round(x+dx*i/steps), Math.round(y+dy*i/steps), c);
+}
+const STARS=[[5,4],[14,9],[24,3],[33,8],[44,5],[55,10],[63,3],[72,7],[9,16],[40,15],[69,14],[28,13],[50,2],[66,9],[19,2]];
+function stars(g,W,H,frac){
+  for(const [x,y] of STARS){ if(x<W && y<H*frac) g.px(x,y,'#cdd6f4'); }
+}
+function cloud(g,x,y){ g.rect(x,y,12,4,'#ffffff'); g.rect(x+2,y-2,8,2,'#ffffff'); }
+function coin(g,x,y){ circle(g,x+1,y+1,1,'#ffd23f'); g.px(x+1,y,'#c79a1f'); g.px(x+1,y+2,'#c79a1f'); }
+function qblock(g,x,y,night){
+  const base = night?'#8a6b3a':'#d9a441', lite = night?'#a8853f':'#e8bd5e', dark = night?'#5f4a22':'#7a5a28';
+  g.rect(x,y,5,5,base); g.rect(x+1,y+1,3,3,lite);
+  g.px(x,y,dark); g.px(x+4,y,dark); g.px(x,y+4,dark); g.px(x+4,y+4,dark);
+}
+function pine(g,x,y){
+  g.rect(x+4,y,2,2,'#0d1428'); g.rect(x+3,y+2,4,2,'#0d1428');
+  g.rect(x+2,y+4,6,2,'#0d1428'); g.rect(x+1,y+6,8,2,'#0d1428');
+  g.rect(x+4,y+8,2,2,'#0a0f1e');
+}
+function gull(g,x,y){
+  g.px(x,y,'#f4f1de'); g.px(x-1,y+1,'#f4f1de'); g.px(x+1,y+1,'#f4f1de');
+  g.px(x-2,y+2,'#f4f1de'); g.px(x+2,y+2,'#f4f1de');
+}
+
+// ---------- 1: plumber ----------
+function plumber(g, work){
+  const W=g.W, H=g.H, gy=Math.round(H*0.72);
+  if(work){
+    g.rect(0,0,W,gy,'#79c1f5');
+    g.rect(0,0,W,Math.round(gy*0.45),'#8ecdf8');
+    cloud(g, Math.round(W*0.12), 5); cloud(g, Math.round(W*0.55), 9); if(W>50) cloud(g, Math.round(W*0.8), 3);
+    g.rect(0,gy,W,H-gy,'#3fae49');
+    g.rect(0,gy,W,2,'#59c862');
+    for(let x=4;x<W;x+=9) g.rect(x,gy+6,2,1,'#2b7f34');
+    g.rect(6,gy-8,10,8,'#2f8f3a'); g.rect(4,gy-10,14,3,'#3fb04c'); g.rect(7,gy-8,2,8,'#256e2d');
+    coin(g, Math.round(W*0.34), gy-14); coin(g, Math.round(W*0.42), gy-16); coin(g, Math.round(W*0.5), gy-14);
+    qblock(g, Math.round(W*0.66), gy-16, false);
+  } else {
+    g.rect(0,0,W,gy,'#141a33');
+    stars(g,W,H,0.6);
+    circle(g, W-12, 8, 5, '#f4f1de'); g.px(W-14, 7, '#d8d2b8'); g.px(W-10, 10, '#d8d2b8');
+    g.rect(0,gy,W,H-gy,'#173322'); g.rect(0,gy,W,2,'#234d31');
+    g.rect(6,gy-8,10,8,'#12281a'); g.rect(4,gy-10,14,3,'#1a3a26');
+    qblock(g, Math.round(W*0.55), gy-12, true);
+    g.px(Math.round(W*0.72), gy-18, '#8f9bb3'); g.px(Math.round(W*0.75), gy-21, '#aab4c9');
+  }
+  // character
+  const x=Math.round(W*0.32), y=gy-10;
+  g.rect(x+1,y,6,2,'#d63b2f');        // cap
+  g.rect(x,y+2,8,1,'#a82a20');        // brim
+  g.rect(x+1,y+3,6,2,'#f2c39a');      // face
+  if(work){ g.px(x+3,y+3,'#222222'); g.px(x+5,y+3,'#222222'); }
+  else { g.rect(x+3,y+3,1,1,'#222222'); g.rect(x+5,y+3,1,1,'#222222'); }
+  g.rect(x+2,y+5,4,1,'#4a2c17');      // mustache
+  g.rect(x,y+6,8,2,'#d63b2f');        // shirt+arms
+  g.rect(x+1,y+6,6,2,'#2b57c9');      // overalls
+  g.px(x,y+7,'#f2c39a'); g.px(x+7,y+7,'#f2c39a');
+  if(work){
+    g.rect(x-1,y+8,2,2,'#2b57c9'); g.rect(x+5,y+8,2,2,'#2b57c9');
+    g.rect(x-2,y+9,3,1,'#5b3a1e'); g.rect(x+5,y+9,3,1,'#5b3a1e');
+  } else {
+    g.rect(x+2,y+8,4,2,'#2b57c9'); g.rect(x+2,y+9,4,1,'#5b3a1e');
+  }
+}
+
+// ---------- 2: valley ----------
+function hillTri(g, cx, baseY, halfW, h, c){
+  for(let i=0;i<h;i++){
+    const w = Math.round(halfW*(1-i/h));
+    g.rect(cx-w, baseY-i, w*2, 1, c);
+  }
+}
+function valley(g, work){
+  const W=g.W, H=g.H, hy=Math.round(H*0.55);
+  if(work){
+    g.rect(0,0,W,hy,'#ffe9b8'); g.rect(0,0,W,Math.round(hy*0.5),'#ffdf9e');
+    const sx=Math.round(W*0.75), sy=Math.min(8, hy-6);
+    g.rect(sx-7,sy,2,1,'#f2b52e'); g.rect(sx+5,sy,2,1,'#f2b52e');
+    g.rect(sx,sy-5,1,2,'#f2b52e'); g.rect(sx,sy+4,1,2,'#f2b52e');
+    circle(g, sx, sy, 4, '#ffcf3f');
+    hillTri(g, Math.round(W*0.22), hy, Math.round(W*0.22), 9, '#69b34c');
+    hillTri(g, Math.round(W*0.68), hy, Math.round(W*0.26), 13, '#55a044');
+    g.rect(0, hy+4, W, H-hy-4, '#4c9440');
+    g.rect(W*0.44, hy+5, 5, 3, '#d9b380'); g.rect(W*0.5, hy+8, 7, 3, '#d9b380'); g.rect(W*0.58, hy+11, 8, 3, '#d9b380');
+    // windmill
+    const mx=Math.round(W*0.16), my=hy-7;
+    g.rect(mx, my, 3, 11, '#8a5a33');
+    diag(g, mx+1, my, -5, -6, '#f2efe2'); diag(g, mx+1, my, 5, -6, '#f2efe2');
+    diag(g, mx+1, my, -5, 6, '#f2efe2'); diag(g, mx+1, my, 5, 6, '#f2efe2');
+    g.px(mx+1, my, '#5b3a1e');
+    // birds
+    const b=[[Math.round(W*0.4),7],[Math.round(W*0.52),11]];
+    for(const [bx,by] of b){ g.px(bx,by,'#4a3a2a'); g.px(bx-1,by+1,'#4a3a2a'); g.px(bx+1,by+1,'#4a3a2a'); }
+  } else {
+    g.rect(0,0,W,hy,'#10173a');
+    stars(g,W,H,0.5);
+    hillTri(g, Math.round(W*0.2), hy, Math.round(W*0.24), 12, '#1c2547');
+    hillTri(g, Math.round(W*0.72), hy, Math.round(W*0.28), 16, '#182040');
+    const mx2=Math.round(W*0.48), my2=8;
+    circle(g, mx2, my2, 8, '#232c54');
+    circle(g, mx2, my2, 5, '#eef3ff');
+    // lake
+    g.rect(0, hy+3, W, H-hy-3, '#0e2038');
+    for(let i=0;i<8;i++){
+      const w2 = i<3?3:(i<5?2:1);
+      g.rect(mx2-1+((i%2)?1:0), hy+5+i, w2, 1, i<3?'#57b8d4':'#2e6f8f');
+    }
+    g.rect(3, hy+8, 4, 1, '#1c3a5c'); g.rect(W-8, hy+10, 4, 1, '#1c3a5c'); g.rect(W-14, hy+6, 3, 1, '#16324a');
+    pine(g, 2, H-10); pine(g, W-12, H-12); if(W>50) pine(g, Math.round(W*0.18), H-8);
+  }
+}
+
+// ---------- 3: robot desk ----------
+function robot(g, work){
+  const W=g.W, H=g.H;
+  const floorY=Math.round(H*0.8);
+  g.rect(0,0,W,H,'#262b3a');
+  g.rect(0,floorY,W,H-floorY,'#1b202c');
+  // window
+  const wx=Math.round(W*0.6), wy=6, ww=Math.round(W*0.3), wh=Math.round(H*0.32);
+  g.rect(wx,wy,ww,wh, work?'#bfe3ff':'#0f1630');
+  g.rect(wx-1,wy-1,ww+2,1,'#454c63'); g.rect(wx-1,wy+wh,ww+2,1,'#454c63');
+  g.rect(wx-1,wy,1,wh+1,'#454c63'); g.rect(wx+ww,wy,1,wh+1,'#454c63');
+  if(work){ circle(g, wx+ww-6, wy+5, 3, '#ffcf3f'); }
+  else { circle(g, wx+ww-7, wy+5, 2, '#eef3ff'); g.px(wx+4,wy+3,'#cdd6f4'); g.px(wx+10,wy+8,'#cdd6f4'); }
+  // desk
+  const dy=Math.round(H*0.58);
+  g.rect(6,dy,W-12,3,'#7a4f2a');
+  g.rect(8,dy+3,3,floorY-dy-3,'#5b3a1e'); g.rect(W-11,dy+3,3,floorY-dy-3,'#5b3a1e');
+  // monitor
+  const mw=18, mh=12, mx2=12;
+  g.rect(mx2,dy-mh-2,mw,mh, work?'#20242e':'#141a24');
+  g.rect(mx2+1,dy-mh-1,mw-2,mh-2, work?'#0e2b1e':'#0c1118');
+  if(work){
+    g.rect(mx2+2,dy-mh,10,1,'#35e08a'); g.rect(mx2+2,dy-mh+2,13,1,'#2bbf74');
+    g.rect(mx2+2,dy-mh+4,8,1,'#2bbf74'); g.rect(mx2+2,dy-mh+6,12,1,'#35e08a');
+    g.rect(mx2+2,dy-mh+8,5,1,'#35e08a');
+  } else { g.rect(mx2+2,dy-mh+1,6,1,'#1d2634'); }
+  g.rect(mx2+7,dy-2,4,2,'#3a4152');
+  g.rect(36,dy-2,12,2,'#59606f');
+  // robot
+  const rx=Math.round(W*0.5), ry=dy-16;
+  g.rect(rx,ry+8,10,8,'#9aa3b2');
+  g.rect(rx+1,ry+9,8,6,'#b7bfcc');
+  g.rect(rx+1,ry,8,8,'#b7bfcc');
+  g.rect(rx+2,ry+1,6,6,'#cfd6e2');
+  g.px(rx+4,ry-2,'#9aa3b2'); g.px(rx+4,ry-1,'#9aa3b2');
+  g.px(rx+4,ry-3, work?'#ff5d5d':'#6b7280');
+  if(work){ g.px(rx+2,ry+3,'#35e0ff'); g.px(rx+3,ry+3,'#35e0ff');
+    g.rect(rx-4,ry+10,4,2,'#9aa3b2'); g.px(rx-5,ry+10,'#cfd6e2');
+  } else { g.rect(rx+2,ry+3,2,1,'#39404d');
+    g.px(rx+8,ry-18,'#8f9bb3'); g.px(rx+10,ry-21,'#aab4c9'); g.px(rx+12,ry-25,'#cdd6f4');
+  }
+  g.rect(rx+1,dy+1,3,floorY-dy-1,'#7a8290'); g.rect(rx+6,dy+1,3,floorY-dy-1,'#7a8290');
+  // coffee (work) / cat (idle)
+  if(work){
+    g.rect(rx-12, dy-5, 4, 4, '#c96a2f');
+    g.px(rx-11, dy-8, '#e8e4d8'); g.px(rx-10, dy-10, '#e8e4d8');
+  } else {
+    g.rect(40, dy-5, 10, 4, '#e08a3c');
+    g.rect(48, dy-7, 4, 3, '#e08a3c');
+    g.px(49,dy-8,'#b96a24'); g.px(51,dy-8,'#b96a24');
+    g.rect(49, dy-6, 2, 1, '#39404d');
+    g.rect(36, dy-3, 4, 2, '#c96a24');
+  }
+}
+
+// ---------- 4: sea ----------
+function sea(g, work){
+  const W=g.W, H=g.H, hy=Math.round(H*0.42);
+  if(work){
+    g.rect(0,0,W,hy,'#8fd3f2');
+    circle(g, Math.round(W*0.18), 7, 4, '#ffd94a');
+    gull(g, Math.round(W*0.5), 6); gull(g, Math.round(W*0.66), 10);
+    g.rect(0,hy,W,H-hy,'#2a8ab2');
+    g.rect(0,hy+Math.round((H-hy)*0.35),W,H,'#24769a');
+    g.rect(0,hy+Math.round((H-hy)*0.7),W,H,'#1f6386');
+    for(let i=0;i<W;i+=7) g.rect(i+(i%3), hy+2, 3, 1, '#cfeeff');
+    for(let i=3;i<W;i+=9) g.rect(i, hy+8, 4, 1, '#a9dcf2');
+    const bx=Math.round(W*0.62), by=hy+4;
+    g.rect(bx, by+6, 16, 3, '#7a4a26');
+    g.rect(bx+1, by+5, 14, 1, '#8f5a30');
+    g.rect(bx+7, by-8, 1, 13, '#5b3a1e');
+    for(let i=0;i<9;i++) g.rect(bx+8, by-8+i, i+1, 1, '#f4f1de');
+    g.px(bx+7, by-9, '#d63b2f'); g.px(bx+8, by-9, '#d63b2f');
+  } else {
+    g.rect(0,0,W,hy,'#0e1630');
+    stars(g,W,H,0.5);
+    const mx2=Math.round(W*0.35), my2=8;
+    circle(g, mx2, my2, 7, '#232c54');
+    circle(g, mx2, my2, 5, '#eef3ff');
+    g.rect(0,hy,W,H-hy,'#0f2740');
+    g.rect(0,hy+Math.round((H-hy)*0.5),W,H,'#0b1d2c');
+    for(let i=0;i<8;i++){
+      const w2 = i<3?3:(i<5?2:1);
+      g.rect(mx2-1, hy+2+i, w2, 1, i<3?'#57b8d4':'#2e6f8f');
+    }
+    g.rect(6, hy+6, 3, 1, '#1c3a5c'); g.rect(W-8, hy+10, 3, 1, '#16324a');
+    const bx=Math.round(W*0.7), by=hy+5;
+    g.rect(bx, by+5, 14, 3, '#4a2f1c');
+    g.rect(bx+6, by-7, 1, 12, '#3a2517');
+    g.rect(bx+7, by-6, 5, 1, '#2a1c12');
+    g.px(bx+1, by+4, '#ffcf3f');
+  }
+}
+
+// ---------- render ----------
+const jobs = [
+  ['c1w', 4, plumber, true ], ['c1i', 4, plumber, false], ['c1d', 2, plumber, true],
+  ['c2w', 4, valley, true  ], ['c2i', 4, valley, false], ['c2d', 2, valley, true],
+  ['c3w', 4, robot, true   ], ['c3i', 4, robot, false], ['c3d', 2, robot, true],
+  ['c4w', 4, sea, true     ], ['c4i', 4, sea, false],   ['c4d', 2, sea, true],
+];
+for(const [id, cell, fn, work] of jobs){
+  const c = document.getElementById(id);
+  const g = makePainter(c, cell);
+  fn(g, work);
+}
+// hybrid strips: reuse the plumber scene cropped to a 16-row grid
+for(const [id, work] of [['c5w', true], ['c5i', false]]){
+  const c = document.getElementById(id);
+  const g = makePainter(c, 4);
+  plumber(g, work);
+}
+</script>
+</body>
+</html>

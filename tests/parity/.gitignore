@@ -1,0 +1,5 @@
+# Parity run artifacts are timestamped and reproducible — don't commit them.
+runs/
+__pycache__/
+# Fresh widget captures copied into the snapshot dir for golden diffing
+../widget/tests/snapshots/_parity_*.png

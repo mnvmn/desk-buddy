@@ -1,0 +1,16 @@
+widget/target
+*.log
+widget/tests/snapshots/*
+# run_widget.ps1 generated mock config
+widget/mock_config.json
+esp32c6_480x480/firmware/lib/
+# build artifacts & throwaways (regenerable; never commit)
+**/__pycache__/
+*.pyc
+esp32c6_480x480/firmware/build/
+esp32s3_272x792/fw/weather_test/build/
+*.bak
+*.hermes-tmp.*
+# shared network config: real creds never committed; generated header either
+shared/net.env
+**/net_config.h

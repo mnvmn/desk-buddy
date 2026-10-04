@@ -1,0 +1,7 @@
+{
+  "servers": [
+    { "host": "m.tower1:11444", "label": "tower1" },
+    { "host": "m.mini1:11444", "label": "mini1" }
+  ],
+  "poll": { "working_ms": 500, "idle_ms": 2000, "error_ms": 5000 }
+}
