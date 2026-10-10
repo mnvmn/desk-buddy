@@ -46,6 +46,32 @@
   (pre-rendered working / not-working, flash-backed, **implemented + verified**)
 - config (NVS): see [../widget/modules/config.md §Device](../widget/modules/config.md#device--nvs-spec-only)
 
+## Gufo (`serve llm`) servers
+
+A Gufo server's `/slots` is a **static** descriptor — `{id, task_id, state,
+prompt, next_token, model}` — with no `is_processing` and no live decode
+counter (the firmware detects it on the first slot lacking `is_processing` and
+sets `s.gufo`). So there is no live rate to render, and the only activity
+signal is the cumulative `tokens_predicted_total` counter, which advances
+**only when a request completes**. On each `/metrics` feed the firmware runs
+the same freshness rule as the widget: a counter advance sets `gufo_active`
+and resets `gufo_idle`; a flat feed increments `gufo_idle`, and once it passes
+`GUFO_ACTIVE_POLLS` (**4**, ≈ 8 s at the 2 s cadence) `gufo_active` falls back
+to false. The render branches on it:
+
+- **active** (`gufo_active` + gauge) → **green** dot, headline = the
+  `predicted_tokens_seconds` gauge (the last completed request's tok/s),
+  leftover line `just generated`.
+- **settled** (gauge present, not active) → **grey** dot, headline = the gauge
+  value, unit `tok/s last`, leftover line `last request`.
+- **no gauge yet** → grey dot, headline `-`, leftover line `ready`.
+
+The `avg N` session chip is **skipped** on a Gufo row (the gauge *is* the
+headline, so a second "avg" chip would just repeat it). Parity with the
+widget: same counter-advance rule and `GUFO_ACTIVE_POLLS = 4` — see
+[buddy-state](../widget/modules/buddy-state.md) and
+[parity](../shared/parity/README.md).
+
 ## Open hardware questions
 
 - **KEY button GPIO** — not in the bundled examples; confirm from the

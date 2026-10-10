@@ -3,7 +3,7 @@
 // M1-live: Wi-Fi + /slots poller feeding the SAME card the widget draws
 // (wiki/widget/modules/render.md): a dark rounded card with ONE DATA ROW
 // PER SERVER — two independent servers (srv1 → m.tower1:11444, srv2 →
-// m.mini1:11444, via LAN_HOST / LAN2_HOST from net_config.h). Each row:
+// m.strix:11444, via LAN_HOST / LAN2_HOST from net_config.h). Each row:
 // status dot + big number left, model + capacity right, leftover line, dim
 // "label host:port" footer.
 //
@@ -17,9 +17,17 @@
 //                  request's prompt stays in the slot while idle, so this
 //                  is the true occupancy the widget shows (parity P1/P5)
 //       tok/s    = Δ(decoded) / REAL elapsed between consecutive polls (B5)
+//     Gufo servers (srv2 = m.strix, `serve llm`) expose a STATIC /slots
+//     descriptor (no is_processing, no decode counter), so they have no live
+//     rate here — detected by the first slot lacking `is_processing`. Their
+//     headline speed is the /metrics `predicted_tokens_seconds` gauge
+//     (avg_tps); "active" (green) is a request having COMPLETED within the
+//     last few /metrics polls (tokens_predicted_total advanced -> gufo_active),
+//     else the row settles to a calm grey "last request". (parity with widget)
 //   * GET /props  once (and on recovery): model name + ftype +
 //       default_generation_settings.n_ctx for the model/capacity lines.
-//     Parse failures keep the last good values — never a crash (B9).
+//     Parse failures keep the last good values — never a crash (B9). Gufo
+//     /props is 400 (best-effort, ignored).
 //
 // States (spec §5): wifi down -> "--" + "wifi down"; /slots unreachable or
 // unparseable -> "--" + "server down"; idle is a healthy state
@@ -70,10 +78,15 @@ static const lv_color_t C_PANE   = lv_color_make(0x00, 0x00, 0x00); // AMOLED of
 
 enum Conn { OK_NET, OFFLINE_WIFI, OFFLINE_SERVER };
 
+// How many consecutive /metrics polls (2 s cadence) a Gufo request completion
+// counts as "active" before the row settles to a calm idle "last req" display.
+// Parity with the widget's buddy_state::GUFO_ACTIVE_POLLS (~8 s per completion).
+#define GUFO_ACTIVE_POLLS 4
+
 // ---- Per-server live state + labels (one card row each) -----------------
 struct Lsrv {
   const char *label;      // "srv1" / "srv2"
-  const char *host;       // LAN address (srv1 = tower1, srv2 = mini1)
+  const char *host;       // LAN address (srv1 = tower1, srv2 = strix)
   int port;
   char model[48];         // overwritten by /props once fetched
   char ftype[32];
@@ -95,6 +108,13 @@ struct Lsrv {
   uint32_t spec_ratio;    // spec_decode_num_accepted / num_draft * 100 (0-100); 0 = speculative off/unknown
   float avg_tps;          // predicted_tokens_seconds gauge (session avg tok/s); 0 = unknown
   uint32_t n_slots;       // /slots array length -> the "×N slots" chip; 0 = unknown
+  bool gufo;              // server is Gufo `serve llm`: /slots has no live decode
+                          // counter / is_processing, so the headline speed comes
+                          // from the /metrics gauge (avg_tps). Activity = a request
+                          // completing (gufo_pred_total advancing) -> gufo_active.
+  uint32_t gufo_pred_total; // baseline tokens_predicted_total (/metrics); 0 = not seen
+  bool gufo_active;         // a request completed within GUFO_ACTIVE_POLLS polls
+  uint8_t gufo_idle;        // consecutive flat /metrics feeds since last completion
   lv_obj_t *l_model, *l_num, *l_sub, *l_left, *l_cap, *l_foot, *l_note, *l_total;
   lv_obj_t *dot;
 };
@@ -102,11 +122,11 @@ struct Lsrv {
 static Lsrv SRV[2] = {
   { "tower1", LAN_HOST, LAN_PORT, "", "",
     160000, OFFLINE_WIFI, false, false, 0.0f, -1, 0, 0, 0, 0, false, 0, false, 0, false, 0,
-    0, 0, 0.0f, 0,
+    0, 0, 0.0f, 0, false, 0, false, 0,
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL },
-  { "mini1", LAN2_HOST, LAN2_PORT, "", "",
+  { "strix", LAN2_HOST, LAN2_PORT, "", "",
     160000, OFFLINE_WIFI, false, false, 0.0f, -1, 0, 0, 0, 0, false, 0, false, 0, false, 0,
-    0, 0, 0.0f, 0,
+    0, 0, 0.0f, 0, false, 0, false, 0,
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL },
 };
 
@@ -265,6 +285,10 @@ static int scene_phase() {
     if (SRV[i].conn == OK_NET) any_net = true;
     if (SRV[i].working && SRV[i].prompting) any_prompt = true;
     else if (SRV[i].working) any_gen = true;
+    // Gufo has no live working flag; gufo_active (a request completed within
+    // the last few /metrics polls) is the "working" evidence (parity with the
+    // widget's phase() and render_srv's green-dot branch).
+    else if (SRV[i].gufo && SRV[i].gufo_active) any_gen = true;
   }
   if (!any_net) return 3;                  // DOWN
   if (any_gen) return 0;                   // WORKING
@@ -389,10 +413,28 @@ static void fetch_metrics(Lsrv &s) {
   if (m[0].v || m[1].v) s.tokens_total = (uint32_t)(m[0].v + m[1].v);
   if (m[0].v > 0)
     s.cached_ratio = (uint32_t)min(100.0, max(0.0, m[2].v / m[0].v * 100.0));
-  if (m[4].v > 0)
+  if (m[4].v > 0.0)
     s.spec_ratio = (uint32_t)min(100.0, max(0.0, m[3].v / m[4].v * 100.0));
   if (m[5].v > 0.0)
     s.avg_tps = (float)m[5].v;
+
+  // Gufo activity (parity with the widget's feed_metrics). Gufo exposes no live
+  // work flag: m[1] (tokens_predicted_total) advances ONLY when a request
+  // completes. An increase vs the last feed = a request just finished -> mark
+  // active; a flat feed decays one step so the row settles to a calm idle
+  // "last req" shortly after. No-op for llama servers (gufo == false).
+  if (s.gufo) {
+    uint32_t pred = (uint32_t)m[1].v;
+    bool advanced = (s.gufo_pred_total != 0) && (pred > s.gufo_pred_total);
+    if (advanced) {
+      s.gufo_active = true;
+      s.gufo_idle = 0;
+    } else {
+      if (s.gufo_idle < 0xFF) s.gufo_idle++;
+      if (s.gufo_idle > GUFO_ACTIVE_POLLS) s.gufo_active = false;
+    }
+    s.gufo_pred_total = pred;
+  }
 }
 
 static void fetch_slots(Lsrv &s) {
@@ -402,6 +444,44 @@ static void fetch_slots(Lsrv &s) {
   if (deserializeJson(doc, body)) { s.conn = OFFLINE_SERVER; return; } // B9
   JsonArray slots = doc.as<JsonArray>();
   if (!slots || slots.isNull()) { s.conn = OFFLINE_SERVER; return; }
+
+  // ---- Gufo `serve llm` ---------------------------------------------------
+  // Gufo's /slots is a STATIC descriptor — `{id, task_id, state, prompt,
+  // next_token, model}` — with NO `is_processing` and NO live decode counter
+  // (next_token is null while idle; the slot stays state:0 through a run). So
+  // there is no live tok/s to derive from /slots here. The work/speed signal
+  // is the lagging /metrics `predicted_tokens_seconds` gauge (fetch_metrics,
+  // every 2 s), which renders as the headline + green dot when it holds a
+  // value. We only record protocol + connectivity + model (it doubles as the
+  // label when /props gives nothing) + the slot count, then return.
+  // Detection (same as the widget): the first slot has no `is_processing`.
+  {
+    const JsonObject first = slots[0];
+    bool is_gufo = first.isNull() || !first.containsKey("is_processing");
+    if (is_gufo) {
+      s.gufo = true;
+      s.n_slots = (uint32_t)slots.size();
+      // No live decode state — clear the llama fields so a stale live rate or
+      // working flag never leaks into the Gufo headline.
+      s.working = false;
+      s.prompting = false;
+      s.toks = 0.0f;
+      s.remain = -1;
+      s.gen_open = false;
+      s.have_decoded = false;
+      s.ctx_used = 0;
+      s.ctx_left = s.n_ctx;
+      // Model name from the slot; fall back to /props for quant + ctx.
+      if (first.containsKey("model")) {
+        const char *mn = first["model"];
+        if (mn && *mn) { strncpy(s.model, mn, sizeof(s.model) - 1); s.model[sizeof(s.model) - 1] = 0; }
+      }
+      if (!s.props_fetched) s.props_fetched = fetch_props(s);  // best-effort (400 on Gufo)
+      s.conn = OK_NET;
+      return;
+    }
+    s.gufo = false;
+  }
 
   bool working = false, prompting = false;
   uint32_t decoded = 0;
@@ -493,6 +573,7 @@ static void fmt_total(char *buf, size_t n, const Lsrv &s) {
 static void render_srv(Lsrv &s) {
   char buf[48], cap[120], left[64], foot[64], note[64];
   lv_color_t dot, numc;
+  const char *unit = "tok/s";
 
   if (s.conn == OFFLINE_WIFI) {
     dot = C_RED; numc = C_DIM;
@@ -506,6 +587,37 @@ static void render_srv(Lsrv &s) {
     snprintf(cap, sizeof(cap), "%s  %s", s.model, s.ftype);
     snprintf(left, sizeof(left), "offline");
     snprintf(foot, sizeof(foot), "%s  %s:%d  server down", s.label, s.host, s.port);
+  } else if (s.gufo && s.gufo_active && s.avg_tps > 0.5f) {
+    // Gufo active: a request just completed (tokens_predicted_total advanced,
+    // see fetch_metrics) — show its generation speed green. No live /slots
+    // decode counter, so the headline is the /metrics `predicted_tokens_seconds`
+    // gauge. The gauge holds its last value, so this only stays green for a few
+    // seconds after each completion (parity with the widget's gufo_active).
+    dot = C_GREEN; numc = C_ACCENT;
+    unit = "tok/s";
+    if (s.avg_tps >= 10.0f) snprintf(buf, sizeof(buf), "%.0f", (double)s.avg_tps);
+    else snprintf(buf, sizeof(buf), "%.1f", (double)s.avg_tps);
+    snprintf(cap, sizeof(cap), "%s", s.ftype[0] ? s.ftype : "gufo");
+    snprintf(left, sizeof(left), "just generated");
+    snprintf(foot, sizeof(foot), "%s  %s:%d", s.label, s.host, s.port);
+  } else if (s.gufo && s.avg_tps > 0.5f) {
+    // Gufo settled: a request completed in the past but not recently — calm
+    // grey dot AND grey number (the last request's speed is not a live rate,
+    // so it reads as inactive; teal is reserved for a fresh completion).
+    dot = C_GRAY; numc = C_GRAY;
+    unit = "tok/s last";
+    if (s.avg_tps >= 10.0f) snprintf(buf, sizeof(buf), "%.0f", (double)s.avg_tps);
+    else snprintf(buf, sizeof(buf), "%.1f", (double)s.avg_tps);
+    snprintf(cap, sizeof(cap), "%s", s.ftype[0] ? s.ftype : "gufo");
+    snprintf(left, sizeof(left), "last request");
+    snprintf(foot, sizeof(foot), "%s  %s:%d", s.label, s.host, s.port);
+  } else if (s.gufo) {
+    // Gufo, no gauge yet: idle (no request completed since boot).
+    dot = C_GRAY; numc = C_DIM;
+    snprintf(buf, sizeof(buf), "-");
+    snprintf(cap, sizeof(cap), "%s", s.ftype[0] ? s.ftype : "gufo");
+    snprintf(left, sizeof(left), "ready");
+    snprintf(foot, sizeof(foot), "%s  %s:%d", s.label, s.host, s.port);
   } else if (s.prompting) {
     // Request in flight, prompt still processing, no decoded tokens yet —
     // the amber phase the widget shows (parity P3). The widget's big number
@@ -581,7 +693,9 @@ static void render_srv(Lsrv &s) {
     note[0] = 0;
     char part[24];
     size_t nl = 0;
-    if (s.avg_tps > 0.5f) {
+    if (s.avg_tps > 0.5f && !s.gufo) {
+      // Gufo: the avg IS the headline (the gauge), so an "avg N" chip would
+      // just repeat it — skip it there (parity with the widget).
       snprintf(part, sizeof(part), "avg %d", (int)(s.avg_tps + 0.5f));
       snprintf(note, sizeof(note), "%s", part);
       nl = strlen(note);
@@ -607,7 +721,7 @@ static void render_srv(Lsrv &s) {
   lv_label_set_text(s.l_num, buf);
   lv_obj_set_style_text_color(s.l_num, numc, 0);
   lv_label_set_text(s.l_cap, cap);
-  lv_label_set_text(s.l_sub, "tok/s");
+  lv_label_set_text(s.l_sub, unit);
   lv_label_set_text(s.l_left, left);
   lv_label_set_text(s.l_foot, foot);
   lv_label_set_text(s.l_note, note);
@@ -673,18 +787,18 @@ static void take_screenshot() {
 // ---- Wi-Fi ---------------------------------------------------------------
 static void net_diagnostics() {
   // TEMP (M1-live bring-up): figure out where the device sits on the LAN.
-  // DNS + TCP + HTTP for BOTH servers — srv2 (mini1) was showing
+  // DNS + TCP + HTTP for BOTH servers — srv2 (strix) was showing
   // "server down" while srv1 was healthy, so probe each one to separate
   // DNS / TCP / HTTP causes.
   IPAddress ip1, ip2;
   bool h1 = WiFi.hostByName("m.tower1", ip1);
-  bool h2 = WiFi.hostByName("m.mini1", ip2);
-  Serial.printf("diag: dns m.tower1 -> %s, m.mini1 -> %s\n",
+  bool h2 = WiFi.hostByName("m.strix", ip2);
+  Serial.printf("diag: dns m.tower1 -> %s, m.strix -> %s\n",
                 h1 ? ip1.toString().c_str() : "FAIL",
                 h2 ? ip2.toString().c_str() : "FAIL");
   struct { const char *host; int port; const char *name; } targets[2] = {
     { LAN_HOST,  LAN_PORT,  "tower1" },
-    { LAN2_HOST, LAN2_PORT, "mini1"  },
+    { LAN2_HOST, LAN2_PORT, "strix"  },
   };
   for (int i = 0; i < 2; i++) {
     uint8_t ok = 0;

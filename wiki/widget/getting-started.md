@@ -89,8 +89,11 @@ status dot is a *painted* circle.
   cannot reach `127.0.0.1`; the widget works either way but the shared
   default is the LAN hostname.
 - Port `11444` (default) reachable; firewall must allow inbound TCP `11444`.
-- `/slots` is always on; `/metrics` only with `--metrics` (this server has it,
-  but the widget does **not** use the gauge — it lags).
+- `/slots` is always on; `/metrics` only with `--metrics` (this server has it;
+  for a **llama.cpp** server the widget uses it for the session footnote only —
+  the gauge lags. A **Gufo** server is the exception: the gauge is its headline
+  and the `tokens_predicted_total` counter's freshness decides activity — see
+  [WINDOWS_WIDGET_SPEC.md §3](../../widget/WINDOWS_WIDGET_SPEC.md)).
 - Verify any time:
   ```sh
   curl -s -o /dev/null -w '%{http_code}' http://m.tower1:11444/slots   # expect 200

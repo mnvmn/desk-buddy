@@ -26,24 +26,34 @@ two are best-effort and a failure just leaves their fields `None`.
   (`feed_ok` / `feed_error` per server) and picks the **minimum** interval
   across servers so a busy server tracks fast even if another is idle.
   `ctx.request_repaint()` per cycle.
-- `fetch_slots` is **defensive**: `next_token` is an **array**; it takes the
-  **processing** slot's `n_decoded` (parity P2 — NOT a sum over all slots, or an
-  idle slot's stale counter double-counts when >1 slot runs in parallel and
-  poisons the next request's rate) and its `n_remain`, ORs `is_processing`, and
-  also reads the first slot's
+- `fetch_slots` is **defensive** and **protocol-aware**. It sniffs the first
+  slot to decide the protocol: a slot carrying `is_processing` is **llama.cpp**
+  (the full schema); one lacking it — Gufo's *static* descriptor
+  (`{id, task_id, state, prompt, next_token, model}`) — is **Gufo**. For
+  **llama.cpp** it takes the **processing** slot's `n_decoded` (parity P2 —
+  NOT a sum over all slots, or an idle slot's stale counter double-counts when
+  >1 slot runs in parallel and poisons the next request's rate) and its
+  `n_remain`, ORs `is_processing`, and also reads the first slot's
   `n_prompt_tokens` (live context occupancy) and `n_ctx` (backs up the
-  `/props` window). Any step failing (timeout, refused, 4xx/5xx,
-  parse error, "not an array") returns `Err` → that server's `Down`, never a
-  crash.
+  `/props` window). For **Gufo** there is no live decode state to extract —
+  it only carries the model name and slot count (`SlotReport::Gufo`); the
+  card's speed + activity come from `/metrics` (see [buddy-state](buddy-state.md)).
+  Any step failing (timeout, refused, 4xx/5xx, parse error, "not an array")
+  returns `Err` → that server's `Down`, never a crash.
 - `fetch_props` is **defensive across llama.cpp versions**: model name is
   `model_alias` (new) else `name` else `model_path` basename; ctx is
   `default_generation_settings.n_ctx` (new) else top-level `n_ctx`; quant is
   `model_ftype`. Any missing field → `None`, never an error.
 - `fetch_metrics` **hand-parses the Prometheus text** (`parse_metric`):
   skips `#` comment lines and grabs `llamacpp:predicted_tokens_seconds`,
-  `prompt_tokens_cached_total`, `prompt_tokens_total`. Missing metric →
-  0 / 0 (the state layer then derives `kv_reuse` from the two cumulative
-  counters, which are robust; the gauge is lagging).
+  `prompt_tokens_cached_total`, `prompt_tokens_total`,
+  `spec_decode_num_accepted_tokens_total`,
+  `spec_decode_num_draft_tokens_total`, and `tokens_predicted_total`. Missing
+  metric → 0 / 0 (the state layer then derives `kv_reuse`, `spec_acceptance`,
+  and the session token total from the cumulative counters, which are robust;
+  the gauge is lagging). On a **Gufo** server this pass is also the activity
+  source — the `tokens_predicted_total` counter advance is what sets
+  `gufo_active` (see [buddy-state](buddy-state.md)).
 - **Servers come from the config file** (`Config::load`), so tests can point
   at [tools/mock_server.py](../../../tools/mock_server.py) without
   recompiling (`DESKBUDDY_CONFIG` → a temp config).
@@ -65,10 +75,13 @@ The values are the `PollTuning` from the config file; the thread sleeps the
 snaps back to `Ok` immediately (baseline cleared, so the next working cycle
 shows `—` once).
 
-> `/metrics` **is** polled, but on a slow ~2 s background pass and only for
-> session stats (footnote) — never the live number. It lags (see
-> [architecture.md](../../shared/architecture.md)); the `/slots`-derived rate is the
-> headline.
+> `/metrics` **is** polled, but on a slow ~2 s background pass. For a
+> **llama.cpp** server it's only for session stats (footnote) — never the live
+> number; it lags (see [architecture.md](../../shared/architecture.md)) and the
+> `/slots`-derived rate is the headline. **Gufo is the exception:** it has no
+> `/slots`-derived rate at all, so this pass supplies both the headline
+> (`predicted_tokens_seconds` gauge) and the activity signal
+> (`tokens_predicted_total` counter advance → `gufo_active`).
 
 ## Dependencies
 

@@ -91,16 +91,36 @@ BuddyState {
 }
 ```
 
-- **`working`** = `any(slot.is_processing)` over `GET /slots`.
-- **tok/s** — primary and only **display** path: `Δ next_token[].n_decoded / Δ real elapsed`
+- **`working`** = `any(slot.is_processing)` over `GET /slots` (llama.cpp only —
+  a Gufo server never reports it).
+- **tok/s** — primary and only **display** path **for a llama.cpp server**:
+  `Δ next_token[].n_decoded / Δ real elapsed`
   between consecutive polls, using **only the processing slot's** `n_decoded`
   (parity P2 — NOT a sum over all slots; an idle slot's stale counter
   double-counts when >1 slot runs in parallel and poisons the next request's
   baseline, reading the rate as 0). Use *real* elapsed, not the nominal
   interval. First working cycle shows `—` (no baseline). The `/metrics`
   `predicted_tokens_seconds` gauge is a **lagging session-average** (verified
-  to read `0.0` during generation) — it is shown only as a **footnote**, never
-  the headline number.
+  to read `0.0` during generation) — for a llama.cpp server it is shown only
+  as a **footnote**, never the headline number.
+- **Gufo (`serve llm`) is the exception.** A Gufo `/slots` is a *static*
+  descriptor (`{id, task_id, state, prompt, next_token, model}`) — no
+  `is_processing`, no live decode counter — so the card has no live rate to
+  derive. It is detected on the first slot lacking `is_processing`
+  (protocol: llama.cpp vs Gufo). The only signal is that the cumulative
+  `tokens_predicted_total` counter **advances**, and it advances **only when a
+  request completes**. So on each `/metrics` poll: if the counter increased
+  since the last poll, the server is marked **active** (`gufo_active = true`)
+  and an idle counter resets; on a flat poll the idle counter increments and,
+  once it exceeds `GUFO_ACTIVE_POLLS` (**4**, ≈ 8 s at the 2 s cadence),
+  `gufo_active` goes back to false. While active the row shows a **green** dot
+  and the headline is the `predicted_tokens_seconds` **gauge** (the last
+  completed request's tok/s) — note that here, and *only* here, the gauge is
+  the headline number; settled-but-a-value-exists shows a **grey** dot with the
+  gauge labelled as the last request's speed, and no gauge yet shows grey `-`.
+  The `Generating` phase (and the sprinting scene band) is on **only** while
+  `gufo_active`; otherwise `Idle`. Parity: the C6 firmware runs the identical
+  counter-advance + `GUFO_ACTIVE_POLLS = 4` decay.
 - **Prompting** = `working` true but `n_decoded == 0` (the request is in
   flight but the prompt is still being preprocessed). A sub-state of the
   working card; derived from `/slots` alone.
@@ -153,6 +173,13 @@ it with `Down` (show the error accent). On `Down`, drop to a slow retry (every
 processed and how fast — distinct from the green decode number in
 `Generating`. Before the first prefill figure it falls back to `···` /
 `prompting…`.
+
+A **Gufo** server (see the data-model bullet above) collapses to
+**`Generating` only while `gufo_active`** and **`Idle`** otherwise — it never
+reaches `Prompting` (no prefill progress to report) and never shows a
+`/slots`-derived number. So a Gufo row is either the green "just generated"
+state (gauge headline) or the grey "last request" / `ready` state; the table
+above is the llama.cpp shape it falls back to when settled.
 
 ---
 
@@ -311,7 +338,7 @@ adding a server is an edit, not a recompile.
 {
   "servers": [
     { "host": "m.tower1:11444", "label": "tower1" },
-    { "host": "m.mini1:11444", "label": "mini1" }
+    { "host": "m.strix:11444", "label": "strix" }
   ],
   "poll": { "working_ms": 500, "idle_ms": 2000, "error_ms": 5000 }
 }
@@ -319,7 +346,7 @@ adding a server is an edit, not a recompile.
 
 | Key | Default | Notes |
 |---|---|---|
-| `servers[]` | `m.tower1:11444` (tower1) + `m.mini1:11444` (mini1) | **the server list, in card order** (index 0 = top row). Each is `host` (required, `host:port` — LAN, not 127.0.0.1) + optional `label` (defaults to `host`). |
+| `servers[]` | `m.tower1:11444` (tower1) + `m.strix:11444` (strix) | **the server list, in card order** (index 0 = top row). Each is `host` (required, `host:port` — LAN, not 127.0.0.1) + optional `label` (defaults to `host`). |
 | `poll.working_ms` | `500` | clamp 200–10 000 |
 | `poll.idle_ms` | `2000` | clamp 200–10 000 |
 | `poll.error_ms` | `5000` | clamp 200–10 000 |

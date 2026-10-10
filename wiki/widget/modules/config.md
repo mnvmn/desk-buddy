@@ -16,7 +16,7 @@ to edit, and read on every launch. This is where the **server list** and the
 {
   "servers": [
     { "host": "m.tower1:11444", "label": "tower1" },
-    { "host": "m.mini1:11444", "label": "mini1" }
+    { "host": "m.strix:11444", "label": "strix" }
   ],
   "poll": { "working_ms": 500, "idle_ms": 2000, "error_ms": 5000 }
 }
@@ -24,7 +24,7 @@ to edit, and read on every launch. This is where the **server list** and the
 
 | Key | Default | Notes |
 |---|---|---|
-| `servers[]` | `m.tower1:11444` (tower1) + `m.mini1:11444` (mini1) | **the server list, in card order** (index 0 = top row). Each is `host` (required, `host:port` — LAN, **not** `127.0.0.1`) + optional `label` (defaults to `host`). |
+| `servers[]` | `m.tower1:11444` (tower1) + `m.strix:11444` (strix) | **the server list, in card order** (index 0 = top row). Each is `host` (required, `host:port` — LAN, **not** `127.0.0.1`) + optional `label` (defaults to `host`). |
 | `poll.working_ms` | `500` | clamp 200–10 000 |
 | `poll.idle_ms` | `2000` | clamp 200–10 000 |
 | `poll.error_ms` | `5000` | clamp 200–10 000 |
@@ -34,7 +34,7 @@ default; malformed JSON → ignore the file, use defaults, log a warning
 (never crash); numeric cadence clamped to sane bounds (`clamp_ms`).
 
 `Config::load()` returns the parsed config (or defaults); `Config::default()`
-is the 2-server default list (tower1 → `m.tower1`, mini1 → `m.mini1`) + default
+is the 2-server default list (tower1 → `m.tower1`, strix → `m.strix`) + default
 cadence. `config_path()` resolves
 `DESKBUDDY_CONFIG` → `%APPDATA%/DeskBuddy/widget.json`.
 

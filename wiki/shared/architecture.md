@@ -22,14 +22,24 @@ lives entirely in `BuddyState` (one per server, wrapped in `WidgetState`) —
 the UI is a function of that struct, so both targets render the same state
 identically and neither can get out of sync.
 
-> **Corrected (2026-09-14 live test, reaffirmed M2):** the `/metrics`
-> `predicted_tokens_seconds` gauge is **not** a live source. It reads `0.0`
-> *while* a slot is generating and only shows the session rate *after* it
-> finishes — it **lags**. The **derived** value from `/slots` (Δ `n_decoded`
-> / real elapsed) is the **only** live headline path. `/metrics` **is** now
-> polled on a slow background pass, but only for a session-average footnote
-> and the KV-cache reuse ratio (from the cumulative `prompt_tokens_*`
-> counters, which are robust). The mock server reproduces the gauge's lag.
+> **Corrected (2026-09-14 live test, reaffirmed M2):** for a **llama.cpp**
+> server the `/metrics` `predicted_tokens_seconds` gauge is **not** a live
+> source. It reads `0.0` *while* a slot is generating and only shows the
+> session rate *after* it finishes — it **lags**. The **derived** value from
+> `/slots` (Δ `n_decoded` / real elapsed) is the **only** live headline path.
+> `/metrics` **is** now polled on a slow background pass, but only for a
+> session-average footnote and the KV-cache reuse ratio (from the cumulative
+> `prompt_tokens_*` counters, which are robust). The mock server reproduces the
+> gauge's lag.
+>
+> **Gufo (`serve llm`) is the exception:** its `/slots` is a static descriptor
+> with no decode counter, so it has *no* live headline path at all. The
+> `/metrics` gauge becomes its headline number (the last completed request's
+> tok/s), and "active" is decided by **freshness** — the `tokens_predicted_total`
+> counter advancing (only on a request completion), held active for
+> `GUFO_ACTIVE_POLLS` (4) polls before settling to a calm "last request". Same
+> rule on the widget and the C6 firmware — see
+> [modules/buddy-state.md](../widget/modules/buddy-state.md).
 
 ## Components
 
@@ -138,10 +148,13 @@ flowchart TD
 
 ## Key Design Decisions
 
-- **`/slots` is the only live source; `/metrics` lags** — the gauge reads 0
-  while generating and the session rate after. It is never the display path
-  (probe + dynamic test confirmed 2026-09-14). M2 polls it on a slow pass for
-  a footnote + KV-reuse only. The mock reproduces the lag.
+- **`/slots` is the only live source; `/metrics` lags (llama.cpp)** — the gauge
+  reads 0 while generating and the session rate after. It is never the display
+  path (probe + dynamic test confirmed 2026-09-14). M2 polls it on a slow pass
+  for a footnote + KV-reuse only. The mock reproduces the lag. **Gufo is the
+  exception** (static `/slots`, no decode counter): the gauge is the headline
+  and activity is the `tokens_predicted_total` counter's freshness — see the
+  note above.
 - **Prompting is a real phase** — `working && decode_total == 0` (in-flight
   request, prompt still being processed) is distinct from both Idle and
   Generating. It lets the card say "prompting…" instead of a flat "working."

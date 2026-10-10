@@ -21,12 +21,20 @@ no hardware, display, or network.
 - Classify the **phase** the row should render (`phase()`): `Down`, `Idle`,
   **`Prompting`** (in-flight, prompt still being processed — `working` but
   `decoded == 0`), `Generating` (tokens decoding). `Prompting` is the
-  state the old two-state (working / not) model could not show.
+  state the old two-state (working / not) model could not show. A Gufo server
+  has no live work signal — it is `Generating` only while `gufo_active` (a
+  request completed within the last few `/metrics` polls), else `Idle`; there
+  is no `Prompting` for Gufo.
 - Compute `working` = `any(slot.is_processing)`.
-- Compute tok/s (derived, **the only live path**): Δ(sum of
-  `next_token[].n_decoded`) / **real elapsed** between polls. First working
-  cycle shows `—` (no usable baseline). The `/metrics` gauge is **not** used
-  as a source — it lags (see [architecture.md](../../shared/architecture.md)).
+- Compute tok/s (derived, **the only live path** for a llama.cpp server):
+  Δ(sum of `next_token[].n_decoded`) / **real elapsed** between polls. First
+  working cycle shows `—` (no usable baseline). The `/metrics` gauge is **not**
+  used as a source for llama.cpp — it lags (see
+  [architecture.md](../../shared/architecture.md)). **Gufo is the exception:**
+  it exposes no live decode counter, so its headline **is** the `/metrics`
+  `predicted_tokens_seconds` gauge (last completed request's speed), and its
+  *activity* is decided by freshness (`gufo_active`), not by the gauge being
+  present (the gauge holds its value while idle).
 - Derive an **ETA**: `eta_secs() = n_remain / toks_per_s` when both are
   known (`n_remain > 0` and a live rate); `None` otherwise (unbounded or no
   rate yet).
@@ -42,6 +50,7 @@ no hardware, display, or network.
 
 ```rust
 pub enum ConnState { Up, Down }                 // desktop (device adds OFFLINE_WIFI)
+pub enum Protocol { Llama, Gufo }               // Llama (default) — from the /slots shape
 pub enum Phase { Down, Idle, Prompting, Generating }   // implements Display
 pub enum DisplayMode { Data, Scene }          // shared across the whole card
 
@@ -56,6 +65,10 @@ pub struct BuddyState {
     pub toks_per_s: f64,                        // 0.0 when idle/prompting or first cycle
     pub n_remain: i64,                          // busy slot's n_remain (-1 = unbounded)
     pub decoded: u64,                           // processing slot's n_decoded; 0 while prefill → drives Prompting
+    pub protocol: Protocol,                     // Llama (default) | Gufo — from the /slots shape (see poller)
+    pub gufo_active: bool,                      // Gufo: a request completed within the last GUFO_ACTIVE_POLLS polls (~8 s)
+    gufo_pred_total: Option<u64>,               // Gufo: baseline tokens_predicted_total (advances only on completion)
+    gufo_idle_calls: u32,                       // Gufo: flat /metrics feeds since last completion (decays gufo_active)
     pub host_label: Option<String>,             // config label (e.g. "tower1")
     pub host: Option<String>,                   // endpoint (set by the poller)
     pub model: Option<String>,                  // /props: model_alias (else model_path base)
@@ -63,7 +76,7 @@ pub struct BuddyState {
     pub ctx_tokens: Option<u64>,                // window: /props n_ctx (slot n_ctx backs up)
     pub ctx_used: Option<u64>,                  // /slots: n_prompt_tokens (live occupancy)
     pub kv_reuse: Option<f64>,                  // /metrics: cached/total prompt tokens, 0..1
-    pub session_avg_tps: Option<f64>,           // /metrics gauge — LAGGING, footnote only
+    pub session_avg_tps: Option<f64>,           // /metrics gauge — LAGGING; footnote only (llama.cpp) but the headline (Gufo)
     rate_hist: Vec<f64>,                        // last ≤32 live tok/s samples → sparkline
     last_decode_total: Option<u64>,             // running counter baseline; None after an error
 }
@@ -79,9 +92,11 @@ pub struct WidgetState {
 pub type SharedState = Arc<Mutex<WidgetState>>; // poller writes, UI clones per frame
 ```
 
-Key methods: `feed_ok(is_processing, decode_total, n_remain, n_prompt_tokens, n_ctx, elapsed)`,
-`feed_error()`, `feed_props(model, quant, ctx_tokens)`,
-`feed_metrics(avg_tps, cached, total)`, `phase()`, `eta_secs()`,
+Key methods: `feed_ok(is_processing, decode_total, n_remain, n_prompt_tokens, n_ctx, prompt_processed, prompt_total, elapsed)` (llama.cpp hot path),
+`feed_gufo(model, n_slots)` (Gufo hot path — no live decode state), `feed_error()`,
+`feed_props(model, quant, ctx_tokens)`,
+`feed_metrics(avg_tps, cached, total, spec_accepted, spec_draft, predicted_total)`,
+`gufo_speed() -> Option<f64>` (the Gufo headline gauge), `phase()`, `eta_secs()`,
 `ctx_usage() -> Option<f64>` (live context fill, 0..1),
 `rate_history() -> &[f64]`, `set_rate_hist(Vec<f64>)` (test/scene seeding),
 `poll_interval(&tuning: &PollTuning) -> Duration`. On `WidgetState`:
@@ -104,8 +119,10 @@ Key methods: `feed_ok(is_processing, decode_total, n_remain, n_prompt_tokens, n_
 - **`feed_error()`** sets `Down`, zeroes `working`/tok/s/`n_remain`/
   `decoded`, and clears `last_decode_total` so recovery snaps back to
   `Up` with a fresh baseline (no stale Δ). It also clears the **session
-  context** — `session_avg_tps`, `kv_reuse` and `rate_hist` — so the down
-  state shows no stale stats or sparkline. It does **not** clear the model /
+  context** — `session_avg_tps`, `kv_reuse`, `spec_acceptance`, `tokens_total`
+  and `rate_hist` — and resets the Gufo activity state (`gufo_active`,
+  `gufo_idle_calls`, `gufo_pred_total`) so the down state shows no stale stats,
+  sparkline, or "just finished" green. It does **not** clear the model /
   quant / ctx (`/props` data) — the endpoint going down doesn't un-know the
   model name.
 - **Sparkline history:** `feed_ok` pushes every *valid* tok/s sample into
@@ -122,8 +139,17 @@ Key methods: `feed_ok(is_processing, decode_total, n_remain, n_prompt_tokens, n_
 - **`feed_props`** applies only non-empty values, so a partial `/props`
   response can't blank a known field.
 - **`feed_metrics`** stores the gauge and computes `kv_reuse = cached/total`
-  clamped to 0..1 (`None` when `total == 0`). The two cumulative counters are
-  the robust reuse signal; the gauge is lagging and footnote-only.
+  clamped to 0..1 (`None` when `total == 0`), `spec_acceptance =
+  accepted/draft` (`None` when no drafts), and `tokens_total =
+  prompt_tokens_total + tokens_predicted_total`. The two cumulative counters
+  are the robust reuse/total signal; the gauge is lagging and footnote-only
+  **for llama.cpp**. It also drives **Gufo activity**: Gufo exposes no live
+  work flag, so the cumulative `tokens_predicted_total` counter advancing is
+  the only "a request just finished" evidence — an increase sets
+  `gufo_active` true and resets the idle counter; a flat feed increments the
+  idle counter, and once it exceeds `GUFO_ACTIVE_POLLS` (= 4, ~8 s at the
+  2 s cadence) `gufo_active` goes false. No-op for llama servers (they have a
+  live decode counter).
 - Bad input from the poller is fed in as an error — this module never
   panics on it.
 
@@ -135,10 +161,14 @@ Per-server phase machine: `idle_is_healthy_and_zero`,
 `delta_rate_over_real_elapsed`, `counter_reset_clears_rate`,
 `eta_from_remain_and_rate`, `eta_none_without_bound_or_rate`,
 `error_clears_everything`, `recovery_snaps_back_to_ok`,
-`metrics_kv_reuse_ratio`, `metrics_ratio_clamped`,
-`props_applies_only_non_empty`, `sparkline_accumulates_decode_rates`,
+`metrics_kv_reuse_ratio`, `metrics_ratio_clamped`, `metrics_spec_acceptance_ratio`,
+`metrics_tokens_total_is_prompt_plus_generated`, `props_applies_only_non_empty`,
+`sparkline_accumulates_decode_rates`,
 `down_clears_session_stats_and_sparkline`, `ctx_usage_ratio_and_clamp`,
-`ctx_usage_needs_window_size`, `down_clears_live_ctx_occupancy`.
+`ctx_usage_needs_window_size`, `down_clears_live_ctx_occupancy`,
+`slots_count_stored_and_ignores_zero`.
+Gufo: `gufo_protocol_and_speed_from_gauge`,
+`gufo_speed_none_for_llama_and_zero_gauge`, `gufo_does_not_show_stale_live_rate`.
 Multi-server: `display_mode`
 toggle, `poll_interval_uses_config_tuning`.
 
@@ -155,8 +185,13 @@ toggle, `poll_interval_uses_config_tuning`.
   receives that value.
 - Idle, prompting, and down must stay distinct end to end; the render layer is
   where they're easiest to conflate.
-- Don't reintroduce the gauge as the live source — it lags behind generation.
-  Its only job is the session-average footnote.
+- Don't reintroduce the gauge as the live source **for llama.cpp** — it lags
+  behind generation. Its only job there is the session-average footnote.
+  **Gufo is the deliberate exception:** it has no live decode counter, so the
+  gauge is its headline number — but its *activity* comes from freshness
+  (`gufo_active`, i.e. the `tokens_predicted_total` counter advancing), never
+  from the gauge being present (the gauge holds its last value while idle,
+  which is why an idle box used to look "generating").
 
 See [shared/API_ENDPOINTS.md](../../../shared/API_ENDPOINTS.md) for exact
 field names.

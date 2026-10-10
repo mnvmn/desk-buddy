@@ -116,6 +116,13 @@ fn fit_text(ctx: &egui::Context, text: &str, font: egui::FontId, max_width: f32)
 
 /// Color of the big number per phase (design §States).
 fn number_color(st: &buddy_state::BuddyState) -> egui::Color32 {
+    // A settled Gufo row shows the last request's speed, not a live rate —
+    // paint it the same gray as the idle dot so it reads as inactive (teal is
+    // reserved for a request that just completed, i.e. gufo_active). The live
+    // llama.cpp idle path keeps white, so this carve-out is Gufo-specific.
+    if st.protocol == buddy_state::Protocol::Gufo && !st.gufo_active {
+        return IDLE_DOT;
+    }
     match st.phase() {
         Phase::Generating => ACCENT,
         Phase::Prompting => PROMPTING,
@@ -182,6 +189,17 @@ fn uniform_font_size(
 
 /// `(big_number, sublabel, dot_color)` for the current phase.
 fn headline(st: &buddy_state::BuddyState) -> (String, String, egui::Color32) {
+    // Gufo has no live decode rate — its headline is the `/metrics` gauge, the
+    // generation speed of the last completed request. Freshness (a request
+    // completed within the last few polls → `gufo_active`) decides green vs a
+    // calm grey "last req" — see `feed_metrics`.
+    if st.protocol == buddy_state::Protocol::Gufo {
+        return match (st.gufo_active, st.gufo_speed()) {
+            (true, Some(g)) => (format!("{:.0}", g), "tok/s".to_string(), GEN_DOT),
+            (false, Some(g)) => (format!("{:.0}", g), "tok/s · last req".to_string(), IDLE_DOT),
+            _ => ("—".to_string(), "ready".to_string(), IDLE_DOT),
+        };
+    }
     match st.phase() {
         Phase::Generating => (
             format!("{:.0}", st.toks_per_s),
@@ -206,6 +224,15 @@ fn headline(st: &buddy_state::BuddyState) -> (String, String, egui::Color32) {
 
 /// Remaining-work / phase-status line (design: a fixed row in every state).
 fn remaining_line(st: &buddy_state::BuddyState) -> (String, egui::Color32) {
+    // Gufo's speed is the last completed request's generation rate (lagging),
+    // not a live bound. Freshness decides the wording: a request that just
+    // finished says "just generated"; otherwise it's calm "loaded · ready".
+    if st.protocol == buddy_state::Protocol::Gufo {
+        return match (st.gufo_active, st.gufo_speed()) {
+            (true, Some(_)) => ("just generated".to_string(), INK),
+            _ => ("loaded · ready".to_string(), DIM),
+        };
+    }
     match st.phase() {
         Phase::Generating => {
             if st.n_remain > 0 {
@@ -229,7 +256,11 @@ fn footnote(st: &buddy_state::BuddyState) -> Option<String> {
     let mut parts = Vec::new();
     if let Some(avg) = st.session_avg_tps {
         if avg > 0.0 {
-            parts.push(format!("avg {avg:.0}"));
+            // On a Gufo server the avg IS the headline (the gauge), so a second
+            // "avg N" chip would just repeat it — skip it there.
+            if st.protocol != buddy_state::Protocol::Gufo {
+                parts.push(format!("avg {avg:.0}"));
+            }
         }
     }
     if let Some(r) = st.kv_reuse {
@@ -842,8 +873,8 @@ fn scene_widget(name: &str) -> Option<WidgetState> {
         Some(s)
     };
     let ws = WidgetState {
-        servers: vec![make("m.tower1:11444")?, make("m.mini1:11444")?],
-        labels: vec!["tower1".to_string(), "mini1".to_string()],
+        servers: vec![make("m.tower1:11444")?, make("m.strix:11444")?],
+        labels: vec!["tower1".to_string(), "strix".to_string()],
         display_mode: if std::env::var("DESKBUDDY_MODE").as_deref() == Ok("scene") {
             DisplayMode::Scene
         } else {
@@ -868,10 +899,14 @@ fn live_widget(host: &str) -> Option<WidgetState> {
         // Δ(tokens)/Δ(real elapsed) math as the poller — so the captured
         // frame shows a real number when the server is mid-generation.
         let snap = |s: &mut buddy_state::BuddyState, elapsed: std::time::Duration| match poller::fetch_slots(host) {
-            Ok((working, decode, remain, ctx_used, n_ctx, pf, pt, n_slots)) => {
+            Ok(poller::SlotReport::Llama((working, decode, remain, ctx_used, n_ctx, pf, pt, n_slots))) => {
                 s.feed_ok(working, decode, remain, ctx_used, n_ctx, pf, pt, elapsed);
                 s.feed_slots_count(n_slots);
                 (working, decode)
+            }
+            Ok(poller::SlotReport::Gufo { model, n_slots }) => {
+                s.feed_gufo(model, n_slots);
+                (false, 0)
             }
             Err(e) => {
                 eprintln!("[buddy] live /slots failed for {host}: {e}");

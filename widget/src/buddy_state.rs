@@ -73,6 +73,23 @@ pub enum ConnState {
     Down,
 }
 
+/// Which inference-server protocol a server speaks, decided by the shape of its
+/// `/slots` response (see `poller::fetch_slots`). Drives how the card derives
+/// its headline speed:
+///   * **Llama** — llama.cpp `server`. `/slots` exposes a live decode counter
+///     (`next_token[].n_decoded`) + `is_processing`, so the headline is a live
+///     Δ`n_decoded`/Δt rate.
+///   * **Gufo** — Gufo `serve llm` (wraps llama.cpp but exposes a *static*
+///     slot descriptor with no decode counter). Its only speed signal is the
+///     lagging `/metrics` `predicted_tokens_seconds` gauge (the last completed
+///     request's generation speed), shown as the headline number.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Protocol {
+    #[default]
+    Llama,
+    Gufo,
+}
+
 /// What the server is doing right now, as the card should render it.
 /// Derived from `(conn, working, whether tokens have started decoding)`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,6 +135,9 @@ pub enum DisplayMode {
 #[derive(Debug, Clone)]
 pub struct BuddyState {
     pub conn: ConnState,
+    /// The server protocol (llama.cpp vs Gufo) decided from `/slots`. See
+    /// `Protocol` — drives which speed source the card renders.
+    pub protocol: Protocol,
     /// Any slot `is_processing`.
     pub working: bool,
     /// Derived generation tok/s; 0.0 when idle/prompting or on the first
@@ -182,12 +202,31 @@ pub struct BuddyState {
     last_prefill_total: Option<u64>,
     /// Recent live tok/s samples (oldest → newest), capped — drives the sparkline.
     rate_hist: Vec<f64>,
+
+    // ---- Gufo activity (no live work flag — see `feed_metrics`) ----
+    /// Baseline of Gufo's cumulative `tokens_predicted_total` counter. It
+    /// advances only when a request *completes* (Gufo never reports live work),
+    /// so an increase is the only "a request just finished" signal.
+    gufo_pred_total: Option<u64>,
+    /// True while a Gufo request completed within the last
+    /// [`GUFO_ACTIVE_POLLS`] `/metrics` polls (~8 s at the 2 s cadence); false
+    /// once settled. Drives the green "generating" state vs a calm idle.
+    pub gufo_active: bool,
+    /// Consecutive `/metrics` feeds with no counter change since the last
+    /// completion — decays `gufo_active` back to false.
+    gufo_idle_calls: u32,
 }
+
+/// How many consecutive `/metrics` polls (at the ~2 s cadence) a Gufo request
+/// completion counts as "active" before the card settles to a calm idle
+/// "last req" display. ≈ `GUFO_ACTIVE_POLLS * 2 s` of activity per completion.
+const GUFO_ACTIVE_POLLS: u32 = 4;
 
 impl Default for BuddyState {
     fn default() -> Self {
         Self {
             conn: ConnState::Down, // unknown until the first poll succeeds
+            protocol: Protocol::default(),
             working: false,
             toks_per_s: 0.0,
             n_remain: -1,
@@ -207,6 +246,9 @@ impl Default for BuddyState {
             last_decode_total: None,
             last_prefill_total: None,
             rate_hist: Vec::new(),
+            gufo_pred_total: None,
+            gufo_active: false,
+            gufo_idle_calls: 0,
         }
     }
 }
@@ -236,6 +278,7 @@ impl BuddyState {
         elapsed: Duration,
     ) {
         self.conn = ConnState::Up;
+        self.protocol = Protocol::Llama; // the full-schema path
         self.working = is_processing;
         self.n_remain = n_remain;
         self.decoded = decode_total;
@@ -303,6 +346,50 @@ impl BuddyState {
         }
     }
 
+    /// Record a successful **Gufo** `/slots` poll. Gufo's slot schema is a
+    /// *static* descriptor — no live decode counter, no `is_processing` — so
+    /// there is no live rate to feed. We only record connectivity, the
+    /// protocol, the model name (it doubles as the card's model label when
+    /// `/props` gives nothing usable), and the slot count. The card's headline
+    /// speed for a Gufo server comes from the lagging `/metrics`
+    /// `predicted_tokens_seconds` gauge (see [`Self::gufo_speed`]).
+    pub fn feed_gufo(&mut self, model: Option<String>, n_slots: u64) {
+        self.conn = ConnState::Up;
+        self.protocol = Protocol::Gufo;
+        // No live working/decode state on Gufo — keep the llama fields neutral
+        // so a stale live rate never shows (the speed comes from the gauge).
+        self.working = false;
+        self.decoded = 0;
+        self.toks_per_s = 0.0;
+        self.n_remain = -1;
+        self.last_decode_total = None;
+        self.last_prefill_total = None;
+        self.prefill_frac = None;
+        self.prefill_tps = 0.0;
+        if let Some(m) = model {
+            if !m.is_empty() {
+                self.model = Some(m);
+            }
+        }
+        if n_slots > 0 {
+            self.n_slots = Some(n_slots);
+        }
+    }
+
+    /// The headline speed for a Gufo server: the `/metrics`
+    /// `predicted_tokens_seconds` gauge (the last completed request's
+    /// generation speed). Gufo exposes no live working signal, so this is the
+    /// only speed the server reports — it lags the current request (the gauge
+    /// updates on completion, not during decode). `None` until the first
+    /// `/metrics` pass or when the gauge reads 0.
+    pub fn gufo_speed(&self) -> Option<f64> {
+        if self.protocol != Protocol::Gufo {
+            return None;
+        }
+        let g = self.session_avg_tps?;
+        (g > 0.0).then_some(g)
+    }
+
     /// Record a failed poll (timeout, refused, 4xx/5xx, parse error → B9).
     pub fn feed_error(&mut self) {
         self.conn = ConnState::Down;
@@ -320,6 +407,9 @@ impl BuddyState {
         self.kv_reuse = None;
         self.spec_acceptance = None;
         self.tokens_total = None;
+        self.gufo_active = false; // no stale "just finished" in the down state
+        self.gufo_idle_calls = 0;
+        self.gufo_pred_total = None;
     }
 
     /// Recent live tok/s samples (oldest → newest), for the sparkline.
@@ -357,6 +447,30 @@ impl BuddyState {
             None
         };
         self.tokens_total = Some(total.saturating_add(predicted_total));
+
+        // Gufo activity. Gufo exposes NO live work flag: `predicted_total`
+        // (cumulative `tokens_predicted_total`) advances only when a request
+        // *completes*. An increase vs the last feed = a request just finished
+        // → mark active for `GUFO_ACTIVE_POLLS` feeds; a flat feed decays one
+        // step, so the card settles to a calm idle "last req" shortly after.
+        // (Llama servers have a live decode counter, so this is a no-op there —
+        // the field is only read on the Gufo render path.)
+        if self.protocol == Protocol::Gufo {
+            let advanced = self
+                .gufo_pred_total
+                .map(|prev| predicted_total > prev)
+                .unwrap_or(false); // first feed: no baseline → not a fresh completion
+            if advanced {
+                self.gufo_active = true;
+                self.gufo_idle_calls = 0;
+            } else {
+                self.gufo_idle_calls += 1;
+                if self.gufo_idle_calls > GUFO_ACTIVE_POLLS {
+                    self.gufo_active = false;
+                }
+            }
+        }
+        self.gufo_pred_total = Some(predicted_total);
     }
 
     /// Record the server's parallel slot count from a `/slots` poll (the
@@ -393,6 +507,19 @@ impl BuddyState {
     pub fn phase(&self) -> Phase {
         if self.conn != ConnState::Up {
             return Phase::Down;
+        }
+        // Gufo exposes no live working signal (its `/slots` never reports
+        // `is_processing`), so it can't be "prompting"/"idle-by-decode". Its
+        // only "a request just finished" evidence is the `tokens_predicted_total`
+        // counter advancing (see `feed_metrics`), which sets `gufo_active` for
+        // a short window after each completion. Show that as the green
+        // Generating state; otherwise a calm Idle ("last req" speed, if any).
+        if self.protocol == Protocol::Gufo {
+            return if self.gufo_active {
+                Phase::Generating
+            } else {
+                Phase::Idle
+            };
         }
         if !self.working {
             return Phase::Idle;
@@ -741,6 +868,76 @@ mod tests {
         // A real change still updates.
         s.feed_slots_count(4);
         assert_eq!(s.n_slots, Some(4));
+    }
+
+    #[test]
+    fn gufo_protocol_and_speed_from_gauge() {
+        let mut s = BuddyState::default();
+        // Gufo /slots poll: marks Gufo, sets the model, and is UP but not
+        // active (no live working signal, and no request completion yet).
+        s.feed_gufo(Some("Qwen3.8 Flash Next".to_string()), 1);
+        assert_eq!(s.protocol, Protocol::Gufo);
+        assert_eq!(s.conn, ConnState::Up);
+        assert_eq!(s.model.as_deref(), Some("Qwen3.8 Flash Next"));
+        assert_eq!(s.n_slots, Some(1));
+        // No gauge yet → no speed → idle, not active.
+        assert!(s.gufo_speed().is_none());
+        assert_eq!(s.phase(), Phase::Idle);
+        // First /metrics feed: records the gauge (the headline speed) but there
+        // is no prior counter baseline yet, so it is NOT a fresh completion.
+        s.feed_metrics(35.0, 0, 57_736, 0, 0, 8_509);
+        assert_eq!(s.gufo_speed(), Some(35.0));
+        assert!(!s.gufo_active);
+        assert_eq!(s.phase(), Phase::Idle);
+        // The `tokens_predicted_total` counter advances → a request just
+        // completed → active (green Generating).
+        s.feed_metrics(35.0, 0, 57_736, 0, 0, 9_000);
+        assert!(s.gufo_active);
+        assert_eq!(s.phase(), Phase::Generating);
+        // Flat feeds decay it back to a calm idle after GUFO_ACTIVE_POLLS —
+        // but the headline speed (the gauge) is retained while settled.
+        for _ in 0..=4 {
+            s.feed_metrics(35.0, 0, 57_736, 0, 0, 9_000);
+        }
+        assert!(!s.gufo_active);
+        assert_eq!(s.phase(), Phase::Idle);
+        assert_eq!(s.gufo_speed(), Some(35.0));
+    }
+
+    #[test]
+    fn gufo_speed_none_for_llama_and_zero_gauge() {
+        // llama.cpp: gufo_speed is always None (the live rate is toks_per_s).
+        let mut s = BuddyState::default();
+        s.feed_ok(true, 10, -1, None, None, None, None, d(500));
+        s.feed_metrics(120.0, 0, 0, 0, 0, 0);
+        assert_eq!(s.protocol, Protocol::Llama);
+        assert!(s.gufo_speed().is_none());
+        // Gufo with a 0 gauge → None (don't show a fake "0 tok/s" headline).
+        let mut g = BuddyState::default();
+        g.feed_gufo(Some("m".to_string()), 1);
+        g.feed_metrics(0.0, 0, 0, 0, 0, 0);
+        assert!(g.gufo_speed().is_none());
+        assert_eq!(g.phase(), Phase::Idle);
+    }
+
+    #[test]
+    fn gufo_does_not_show_stale_live_rate() {
+        let mut s = BuddyState::default();
+        s.feed_gufo(Some("Qwen3.8 Flash Next".to_string()), 1);
+        // A Gufo server must never carry a live decode rate, even if toks_per_s
+        // were somehow set — the headline for Gufo is the gauge only, and the
+        // phase is active only right after a completion (counter advance).
+        s.toks_per_s = 999.0;
+        assert_eq!(s.phase(), Phase::Idle); // no gauge yet
+        // First feed records the gauge (headline) but no completion yet.
+        s.feed_metrics(35.0, 0, 1, 0, 0, 1);
+        assert_eq!(s.gufo_speed(), Some(35.0));
+        assert!(!s.gufo_active);
+        assert_eq!(s.phase(), Phase::Idle);
+        // Counter advances → a request just completed → active (green).
+        s.feed_metrics(35.0, 0, 1, 0, 0, 2);
+        assert!(s.gufo_active);
+        assert_eq!(s.phase(), Phase::Generating);
     }
 
 }

@@ -12,7 +12,7 @@ all on-device now** too: the **`×N slots`** capacity-line chip (from the
 prompt_tokens_total`, clamped 0–100), the **`spec NN%`** footnote (speculative
 acceptance `accepted / draft`), the **`avg NN`** footnote
 (`predicted_tokens_seconds` gauge — hidden when ~0, i.e. idle, exactly like the
-widget). (The widget's **tok/s sparkline** is widget-only — the device has no
+widget; **skipped entirely on a Gufo row**, where the gauge *is* the headline). (The widget's **tok/s sparkline** is widget-only — the device has no
 equivalent and it is *not* a parity item.) The
 **`prompting` prefill-% headline** is on-device too: while a prompt is still
 processing the big number is `n_prompt_tokens_processed / n_prompt_tokens ×
@@ -59,6 +59,16 @@ scene goldens check the widget's *rendering* fidelity; the **`widget LIVE`
 panel** (step 4) is what actually compares the widget against the device on
 the *same* live server at the *same* moment — the two tok/s numbers on the
 sheet should be within one poll's worth of drift of each other.
+
+> **Gufo activity parity:** a Gufo server has no live work flag, so *both*
+> frontends decide "active" the same way — a request *completion*, detected as
+> the cumulative `tokens_predicted_total` counter advancing between `/metrics`
+> feeds. Each side marks the server `gufo_active` on an advance and decays it
+> after `GUFO_ACTIVE_POLLS` (**4**) flat feeds (≈ 8 s at the 2 s cadence);
+> while active both render the green "just generated" state (headline = the
+> `predicted_tokens_seconds` gauge), and settled both render grey "last
+> request". Same constant, same rule → the same green/grey window on both
+> targets (see [buddy-state](../widget/modules/buddy-state.md)).
 
 ## Run it
 

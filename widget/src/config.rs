@@ -16,9 +16,10 @@ use crate::buddy_state::PollTuning;
 use serde::Deserialize;
 
 /// Default hosts (LAN hosts, NOT 127.0.0.1 — spec §3.1). `DEFAULT_HOST` is
-/// the primary (tower1); `DEFAULT_HOST2` is the second card row (mini1).
+/// the primary (tower1, a llama.cpp `server`); `DEFAULT_HOST2` is the second
+/// card row (strix — Gufo `serve llm`; formerly `m.mini1`, renamed 2026).
 pub const DEFAULT_HOST: &str = "m.tower1:11444";
-pub const DEFAULT_HOST2: &str = "m.mini1:11444";
+pub const DEFAULT_HOST2: &str = "m.strix:11444";
 
 /// One inference server the card watches.
 #[derive(Debug, Clone)]
@@ -38,12 +39,12 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         // Two servers on the two default LAN hosts (the "two hosts" baseline):
-        // row 1 = tower1 (m.tower1), row 2 = mini1 (m.mini1). Edit widget.json
-        // to change either.
+        // row 1 = tower1 (m.tower1, llama.cpp), row 2 = strix (m.strix, Gufo;
+        // formerly m.mini1). Edit widget.json to change either.
         Self {
             servers: vec![
                 ServerCfg { host: DEFAULT_HOST.to_string(), label: "tower1".to_string() },
-                ServerCfg { host: DEFAULT_HOST2.to_string(), label: "mini1".to_string() },
+                ServerCfg { host: DEFAULT_HOST2.to_string(), label: "strix".to_string() },
             ],
             poll: PollTuning::default(),
         }
@@ -159,7 +160,7 @@ fn write_default(path: &std::path::Path) -> std::io::Result<()> {
 pub const DEFAULT_CONFIG_TEXT: &str = r#"{
   "servers": [
     { "host": "m.tower1:11444", "label": "tower1" },
-    { "host": "m.mini1:11444", "label": "mini1" }
+    { "host": "m.strix:11444", "label": "strix" }
   ],
   "poll": { "working_ms": 500, "idle_ms": 2000, "error_ms": 5000 }
 }

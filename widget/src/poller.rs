@@ -48,7 +48,26 @@ const SOFT_TIMEOUT: Duration = Duration::from_millis(1000);
 type SlotData = (bool, u64, i64, Option<u64>, Option<u64>, Option<u64>, Option<u64>, u64);
 //   (working, decode_total, n_remain, ctx_used, n_ctx, prefill_processed, prefill_total, n_slots)
 
-pub fn fetch_slots(host: &str) -> Result<SlotData, String> {
+/// A successful `/slots` poll. Two server protocols are supported:
+///   * **llama.cpp** — the full slot schema with a live decode counter
+///     (`next_token[].n_decoded`) and `is_processing`; the headline rate is a
+///     live Δ`n_decoded`/Δt.
+///   * **Gufo** (`serve llm`) — a minimal *static* slot descriptor
+///     (`{id, task_id, state, prompt, next_token, model}`) with NO live decode
+///     counter and no working flag (it stays `state:0` throughout a generation).
+///     Its only speed signal is the lagging `/metrics` `predicted_tokens_seconds`
+///     gauge, which updates on each *completed* request — the server's
+///     generation speed, not a live rate.
+pub enum SlotReport {
+    /// llama.cpp: `(working, decode_total, n_remain, ctx_used, n_ctx,
+    /// prefill_processed, prefill_total, n_slots)`.
+    Llama(SlotData),
+    /// Gufo: no live decode state. `model` is the server's model name; the card
+    /// reads its speed from the `/metrics` gauge.
+    Gufo { model: Option<String>, n_slots: u64 },
+}
+
+pub fn fetch_slots(host: &str) -> Result<SlotReport, String> {
     let url = format!("http://{host}/slots");
     let body = ureq::get(&url)
         .timeout(Duration::from_millis(1500))
@@ -59,6 +78,22 @@ pub fn fetch_slots(host: &str) -> Result<SlotData, String> {
 
     let v: serde_json::Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
     let slots = v.as_array().ok_or_else(|| "slots: not an array".to_string())?;
+
+    // Protocol detection: a llama.cpp slot always carries `is_processing` (and
+    // `n_ctx`); a Gufo slot does not — it has `task_id`/`state`/`model` and no
+    // decode counter. We branch on the first slot so a mixed/empty response is
+    // still handled by whichever schema the data actually has.
+    let first = slots.first();
+    let is_gufo = first.map_or(false, |s| s.get("is_processing").is_none());
+    if is_gufo {
+        // No live decode state to extract — the card reads its speed from the
+        // /metrics gauge. Carry the model name (it doubles as the card's model
+        // label when /props gives nothing usable) + the slot count.
+        let model = first
+            .and_then(|s| s.get("model").and_then(|x| x.as_str()))
+            .map(str::to_string);
+        return Ok(SlotReport::Gufo { model, n_slots: slots.len() as u64 });
+    }
 
     let (mut working, mut total, mut remain) = (false, 0u64, -1i64);
     let (mut ctx_used, mut n_ctx) = (None, None);
@@ -106,7 +141,7 @@ pub fn fetch_slots(host: &str) -> Result<SlotData, String> {
             }
         }
     }
-    Ok((working, total, remain, ctx_used, n_ctx, prefill_processed, prefill_total, slots.len() as u64))
+    Ok(SlotReport::Llama((working, total, remain, ctx_used, n_ctx, prefill_processed, prefill_total, slots.len() as u64)))
 }
 
 /// `(model, quant, ctx_tokens)` from `GET /props`.
@@ -313,7 +348,7 @@ pub fn spawn_poller(state: Arc<Mutex<WidgetState>>, ctx: eframe::egui::Context, 
         loop {
             // 1) Fetch /slots for every server WITHOUT holding the lock, so a
             //    slow/unreachable server (1.5 s timeout) never blocks the UI.
-            let mut results: Vec<Result<SlotData, String>> = Vec::new();
+            let mut results: Vec<Result<SlotReport, String>> = Vec::new();
             for srv in servers.iter() {
                 results.push(fetch_slots(&srv.host));
             }
@@ -326,9 +361,14 @@ pub fn spawn_poller(state: Arc<Mutex<WidgetState>>, ctx: eframe::egui::Context, 
                 for (i, res) in results.into_iter().enumerate() {
                     let s = &mut st.servers[i];
                     match res {
-                        Ok((working, total, remain, prompt_tokens, n_ctx, prefill_processed, prefill_total, n_slots)) => {
+                        Ok(SlotReport::Llama((working, total, remain, prompt_tokens, n_ctx, prefill_processed, prefill_total, n_slots))) => {
                             s.feed_ok(working, total, remain, prompt_tokens, n_ctx, prefill_processed, prefill_total, last[i].elapsed());
                             s.feed_slots_count(n_slots);
+                        }
+                        Ok(SlotReport::Gufo { model, n_slots }) => {
+                            // Static descriptor: no live decode state. Model +
+                            // slot count only; the speed comes from /metrics.
+                            s.feed_gufo(model, n_slots);
                         }
                         Err(_) => s.feed_error(),
                     }
@@ -451,14 +491,44 @@ mod tests {
     #[test]
     fn fetch_slots_live() {
         match fetch_slots(crate::config::DEFAULT_HOST) {
-            Ok((working, total, remain, prompt_tokens, n_ctx, pf, pt, n_slots)) => {
+            Ok(SlotReport::Llama((working, total, remain, prompt_tokens, n_ctx, pf, pt, n_slots))) => {
                 eprintln!(
-                    "LIVE /slots: working={working} decode_total={total} n_remain={remain} ctx={prompt_tokens:?}/{n_ctx:?} prefill={pf:?}/{pt:?} slots={n_slots}"
+                    "LIVE /slots (llama): working={working} decode_total={total} n_remain={remain} ctx={prompt_tokens:?}/{n_ctx:?} prefill={pf:?}/{pt:?} slots={n_slots}"
                 );
                 assert!(remain >= -1);
             }
+            Ok(SlotReport::Gufo { model, n_slots }) => {
+                eprintln!("LIVE /slots (gufo): model={model:?} slots={n_slots}");
+                assert!(n_slots > 0);
+            }
             Err(e) => panic!("server unreachable: {e}"),
         }
+    }
+
+    /// A Gufo-style /slots body (no `is_processing`, has `model`) must be
+    /// classified as the Gufo protocol with the model name carried.
+    #[test]
+    fn gufo_slots_schema_detected() {
+        let body = r#"[{"id":0,"task_id":0,"state":0,"prompt":"","next_token":null,"model":"Qwen3.8 Flash Next"}]"#;
+        let v: serde_json::Value = serde_json::from_str(body).unwrap();
+        // Mirror fetch_slots' detection: no is_processing on the first slot.
+        let is_gufo = v
+            .as_array()
+            .and_then(|a| a.first())
+            .map_or(false, |s| s.get("is_processing").is_none());
+        assert!(is_gufo, "a Gufo slot (no is_processing) must be detected as Gufo");
+    }
+
+    /// A llama.cpp /slots body (has `is_processing`) is NOT the Gufo protocol.
+    #[test]
+    fn llama_slots_schema_not_gufo() {
+        let body = r#"[{"id":0,"is_processing":true,"next_token":[{"n_decoded":10,"n_remain":5}]}]"#;
+        let v: serde_json::Value = serde_json::from_str(body).unwrap();
+        let is_gufo = v
+            .as_array()
+            .and_then(|a| a.first())
+            .map_or(false, |s| s.get("is_processing").is_none());
+        assert!(!is_gufo, "a llama.cpp slot (has is_processing) must NOT be Gufo");
     }
 
     /// Live check against the real server's /props (skipped if it's down).
