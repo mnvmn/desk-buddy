@@ -28,9 +28,9 @@ machine-readable report.
 1. **Widget side** — for each scene (`generating`, `idle`, `down`,
    `prompting`), spawns `deskbuddy_widget.exe` with
    `DESKBUDDY_SCENE=<scene>` + `EFRAME_SCREENSHOT_TO=<out.png>` (the same
-   deterministic-render hook as `widget/tests/screenshot_test.rs`), then
+   deterministic-render hook as `desktop-llama/tests/screenshot_test.rs`), then
    checks the fresh capture against the committed golden in
-   `widget/tests/snapshots/` (mean per-channel diff < 1.5).
+   `desktop-llama/tests/snapshots/` (mean per-channel diff < 1.5).
 3. **Device side** — opens COM3 and drives the firmware:
    - waits for **two consecutive `poll: idle`** lines, sends `CAP`, and
      composites the 480×480 panel from the streamed tiles → `device_idle_*.png`;
@@ -45,7 +45,7 @@ machine-readable report.
    (no scene). The widget seeds its `BuddyState` from the *live* server —
    `/props`, `/metrics`, and two `/slots` snapshots 800 ms apart for a real
    tok/s — so it reads the **same server at the same moment** the device
-   frame was captured. Saved as `widget/widget_live.png` and shown as a
+   frame was captured. Saved as `desktop-llama/widget_live.png` and shown as a
    `widget LIVE` panel on the sheet. This is the true "same input → same
    numbers" comparison (defect P4).
 5. **Report** — `runs/<UTC-stamp>/report.json` with per-frame
@@ -68,7 +68,7 @@ sheet should be within one poll's worth of drift of each other.
 > while active both render the green "just generated" state (headline = the
 > `predicted_tokens_seconds` gauge), and settled both render grey "last
 > request". Same constant, same rule → the same green/grey window on both
-> targets (see [buddy-state](../widget/modules/buddy-state.md)).
+> targets (see [buddy-state](../../desktop-llama/modules/buddy-state.md)).
 
 ## Run it
 
@@ -86,7 +86,7 @@ python tests/parity/parity_test.py --device-only
 python tests/parity/parity_test.py --frames 2 --skip-idle --build
 ```
 
-Prereqs: widget binary built (`--build` or `cargo build` in `widget/`),
+Prereqs: widget binary built (`--build` or `cargo build` in `desktop-llama/`),
 `pyserial` + `Pillow` (host side only), device plugged in on `--port`
 (default `COM3`), `llama-server` up on `m.tower1:11444` (checked at start;
 the run continues and the device frames will show down otherwise).
@@ -148,14 +148,14 @@ tests/parity/
 └── runs/<stamp>/     # one dir per run
     ├── report.json   # machine-readable results + validation
     ├── sheet.png     # side-by-side contact sheet (incl. widget LIVE)
-    ├── widget/widget_<scene>.png
-    ├── widget/widget_live.png      # DESKBUDY_LIVE_SERVER capture (P4)
+    ├── desktop-llama/widget_<scene>.png
+    ├── desktop-llama/widget_live.png      # DESKBUDY_LIVE_SERVER capture (P4)
     └── device/device_<phase>_<ts>.png
 ```
 
 Related: `wiki/shared/parity/defects-2026-09-26.md` (the 5 parity defects found by
 this test and the fixes they drove); widget golden test
-`widget/tests/screenshot_test.rs` (the deterministic render this reuses);
-device capture helpers `esp32c6_480x480/firmware/tools/capture_panel.py` (boot
+`desktop-llama/tests/screenshot_test.rs` (the deterministic render this reuses);
+device capture helpers `amoled-panel-llama/firmware/tools/capture_panel.py` (boot
 capture) and `capture_live.py` (manual live capture this automates);
-`wiki/esp32c6_480x480/firmware-build.md` (build/flash recipe).
+`wiki/amoled-panel-llama/firmware-build.md` (build/flash recipe).

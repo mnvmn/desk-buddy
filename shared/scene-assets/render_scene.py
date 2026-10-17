@@ -17,7 +17,7 @@ States:
   down       Phase::Down        calm level + a Piranha Plant in the middle
              of the scene — no plumber, no coins
 
-`esp32c6_480x480/firmware/plumber_scene.h` is also (re)generated: four
+`amoled-panel-llama/firmware/plumber_scene.h` is also (re)generated: four
 480x480 RGB565 arrays (480*480*2 = 460800 B each, ~1.8 MB total rodata —
 full-bleed square picture on the 480x480 AMOLED panel; the device is
 built with the max_app_4MB partition scheme to fit).
@@ -371,15 +371,13 @@ def main():
         Image.frombytes("RGB", (dw, dh), drgb).save(
             os.path.join(HERE, "bitmaps", "device", f"{name}.png"))
         d565 = to_rgb565(drgb)
-        with open(os.path.join(HERE, "bitmaps", "device", f"{name}.bin"), "wb") as f:
-            f.write(d565)
         hdr.append(emit_c(f"scene_{name}_data", d565))
         hdr.append("")
         print(f"{name}: widget {ww}x{wh} + device {dw}x{dh} ok")
 
     with open(os.path.join(HERE, "bitmaps", "widget", "scene_assets.rs"), "w") as f:
         f.write("\n".join(rs_parts) + "\n")
-    with open(os.path.join(ROOT, "esp32c6_480x480", "firmware", "plumber_scene.h"), "w") as f:
+    with open(os.path.join(ROOT, "amoled-panel-llama", "firmware", "plumber_scene.h"), "w") as f:
         f.write("\n".join(hdr) + "\n")
     print("wrote bitmaps/widget/scene_assets.rs + firmware/plumber_scene.h")
 
