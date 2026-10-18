@@ -2,4 +2,4 @@
 runs/
 __pycache__/
 # Fresh widget captures copied into the snapshot dir for golden diffing
-../widget/tests/snapshots/_parity_*.png
+../desktop-llama/tests/snapshots/_parity_*.png

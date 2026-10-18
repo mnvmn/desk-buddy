@@ -2,8 +2,8 @@
 """Generate shared/net_config.h from shared/net.env (single source of truth).
 
 Both ESP32 firmwares include <net_config.h>:
-  - esp32c6_480x480/firmware (WiFi + /slots poller)
-  - esp32s3_272x792/fw/test_sketch (net status page)
+  - amoled-panel-llama/firmware (WiFi + /slots poller)
+  - epaper-panel-weather/fw/test_sketch (net status page)
 Compile flag (arduino-cli):  --include C:/Users/.../desk-buddy/shared
 
 Usage: python shared/tools/net_config.py

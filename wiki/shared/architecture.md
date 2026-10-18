@@ -1,8 +1,8 @@
 # Architecture
 
-DeskBuddy has the Windows desktop widget (`widget/`, **implemented in Rust,
-M3**), the ESP32-C6 AMOLED panel (`esp32c6_480x480/`, **implemented, M1-static
-card + scene**), and the ESP32-S3 e-paper panel (`esp32s3_272x792/`, **bring-up:
+DeskBuddy has the Windows desktop widget (`desktop-llama/`, **implemented in Rust,
+M3**), the ESP32-C6 AMOLED panel (`amoled-panel-llama/`, **implemented, M1-static
+card + scene**), and the ESP32-S3 e-paper panel (`epaper-panel-weather/`, **bring-up:
 net-status page + live weather** — not yet on the buddy-state data path). The
 widget and the C6 panel are deliberately separate programs sharing one **data
 contract**, not one codebase: a poll of `GET /slots` on the host's LAN, the
@@ -39,41 +39,43 @@ identically and neither can get out of sync.
 > counter advancing (only on a request completion), held active for
 > `GUFO_ACTIVE_POLLS` (4) polls before settling to a calm "last request". Same
 > rule on the widget and the C6 firmware — see
-> [modules/buddy-state.md](../widget/modules/buddy-state.md).
+> [modules/buddy-state.md](../desktop-llama/modules/buddy-state.md).
 
 ## Components
 
 - **`buddy_state`** — the state machine + tok/s math. Pure logic, I/O
   injected, unit-testable without hardware or a display. The one piece of
-  logic both targets reuse. Implemented as `widget/src/buddy_state.rs`
+  logic both targets reuse. Implemented as `desktop-llama/src/buddy_state.rs`
   (`BuddyState` + `ConnState` per server, wrapped in the multi-server
-  `WidgetState`). See [modules/buddy-state.md](../widget/modules/buddy-state.md).
+  `WidgetState`). See [modules/buddy-state.md](../desktop-llama/modules/buddy-state.md).
 - **`poller`** — adaptive multi-server HTTP client. Implemented as
-  `widget/src/poller.rs`: an OS thread (not the GUI thread) that `GET /slots`
+  `desktop-llama/src/poller.rs`: an OS thread (not the GUI thread) that `GET /slots`
   for **every configured server** on the adaptive hot path (500 ms working /
   2 s idle / 5 s error, 1500 ms per-request timeout), **fetching all servers
   without the lock first, then applying under one short lock**, plus a
   one-time `GET /props` per server (1000 ms) and a ~2 s background
   `GET /metrics` per server (1000 ms). Feeds each server's `BuddyState`, and
-  calls `ctx.request_repaint()`. See [modules/poller.md](../widget/modules/poller.md).
-- **`render`** (widget) — `widget/src/main.rs`: an `eframe`/`egui` 0.36
+  calls `ctx.request_repaint()`. See [modules/poller.md](../desktop-llama/modules/poller.md).
+- **`render`** (widget) — `desktop-llama/src/main.rs`: an `eframe`/`egui` 0.36
   borderless, transparent, always-on-top window (`BuddyApp`) that clones
   `WidgetState` each frame and paints one row per server (status dot + big
   number, right-aligned model + capacity, leftover line, tok/s sparkline +
   session footnote, dim label/host footer) — or, in scene mode, the
   combined-activity "Plumber's run" bands (blits of `shared/scene-assets/` bitmaps). Window
-  height scales with the server count. See [modules/render.md](../widget/modules/render.md).
+  height scales with the server count. See [modules/render.md](../desktop-llama/modules/render.md).
 - **`config`** — implemented: the server list + poll cadence come from the
   JSON config file `%APPDATA%/DeskBuddy/widget.json` (path overridable via
   `DESKBUDDY_CONFIG`); it's written on first run and editable without
   recompile. Device NVS is still planned. See
-  [modules/config.md](../widget/modules/config.md).
+  [modules/config.md](../desktop-llama/modules/config.md).
 - **`display_bsp`** (device) — wraps the Waveshare `sh8601` 4-bit panel
-  init. *Spec only.* See [modules/display-bsp.md](../esp32c6_480x480/modules/display-bsp.md).
-- **`ui`** (device) — LVGL v9 screens: live number, idle, screensaver
-  pictures, error glyphs, boot splash. *Spec only.* See [modules/ui.md](../esp32c6_480x480/modules/ui.md).
-- **`button`** (device) — KEY debounce + Live ⇄ Screensaver toggle. *Spec
-  only.* See [modules/button.md](../esp32c6_480x480/modules/button.md).
+  init, LVGL lock, flush rotation. *Implemented* (`bsp_lvgl_port`). See
+  [modules/display-bsp.md](../amoled-panel-llama/modules/display-bsp.md).
+- **`ui`** (device) — LVGL v9 data card + state-following plumber scene.
+  *Implemented* (in `firmware.ino`). See [modules/ui.md](../amoled-panel-llama/modules/ui.md).
+- **`input`** (device) — CST9220 touch (scene ⇄ card) + serial command
+  console; no physical button was built. *Implemented*. See
+  [modules/input.md](../amoled-panel-llama/modules/input.md).
 
 ## System Diagram
 
@@ -85,7 +87,7 @@ flowchart TD
     Props["GET /props (once: model/quant/ctx)"]
     Metrics["GET /metrics (~2s: session stats, lags)"]
 
-    subgraph Device["ESP32 panel (esp32c6_480x480/) — spec"]
+    subgraph Device["ESP32 panel (amoled-panel-llama/) — spec"]
         DPoller[poller]
         DState[buddy_state]
         Dbsp[display_bsp / sh8601]
@@ -94,7 +96,7 @@ flowchart TD
         Dnvs[(NVS config)]
     end
 
-    subgraph Widget["Windows widget (widget/) — Rust, M3"]
+    subgraph Widget["Windows widget (desktop-llama/) — Rust, M3"]
         WPoller["poller thread (ureq) — one thread, all servers"]
         WState["WidgetState: Vec<BuddyState> Arc<Mutex>"]
         Wcard["render / egui card — per-server rows + scene band blits (scene_assets)"]
@@ -127,7 +129,7 @@ flowchart TD
 
 1. **Poll** — the poller *thread* wakes on the minimum adaptive interval and
    `GET /slots` for **every configured server** (1500 ms timeout each),
-   **without holding the lock**. [modules/poller.md](../widget/modules/poller.md)
+   **without holding the lock**. [modules/poller.md](../desktop-llama/modules/poller.md)
 2. **Parse defensively** — JSON array of slots per server; `next_token` is an
    **array**; `working = any(is_processing)`; `decode_total = Σ n_decoded`
    across slots *and* array entries; first `n_remain`. Any failure ⇒ that
@@ -140,7 +142,7 @@ flowchart TD
    sleeps the **minimum** `poll_interval(tuning)` across servers. Separately,
    `feed_props` (once per server) and `feed_metrics` (~2 s per server)
    populate the best-effort model / session fields — they never touch `conn`
-   or the rate. [modules/buddy-state.md](../widget/modules/buddy-state.md)
+   or the rate. [modules/buddy-state.md](../desktop-llama/modules/buddy-state.md)
 4. **Render on change** — the poller calls `ctx.request_repaint()`; the next
    frame clones `WidgetState` and draws **one row per server** (phase headline
    + model line + leftover (`~Ns left · N tok`) + session footnote

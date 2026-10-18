@@ -3,8 +3,8 @@
 #
 # The widget reads its server list from a JSON config file. This helper writes
 # a mock config (one server at 127.0.0.1:11445) and points DESKBUDDY_CONFIG at
-# it, so no recompile is needed. See widget/WINDOWS_WIDGET_SPEC.md §14.
-$wd = Join-Path $PSScriptRoot "..\widget"
+# it, so no recompile is needed. See desktop-llama/WINDOWS_WIDGET_SPEC.md §14.
+$wd = Join-Path $PSScriptRoot "..\desktop-llama"
 $wd = (Resolve-Path $wd).Path
 $cfg = Join-Path $wd "mock_config.json"
 @"

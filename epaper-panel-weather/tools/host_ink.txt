@@ -1,0 +1,6 @@
+host_ink.txt written (800x272)
+MOON_PHASE=0.2416829914
+left  block-codes: 3 1 0 1
+day0 block-codes: 3 1 0 0
+day1 block-codes: 0 1 0 1day0 lo/hi: 12.4 / 20.0   day1 lo/hi: 8.7 / 15.0
+rain_state: DRY  (codes[0..5]=3 3 3 3 1 1, rain_total=0.00)

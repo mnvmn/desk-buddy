@@ -32,14 +32,13 @@ shared/scene-assets/
 ├── scene-mode.html            (standalone mockup of the widget's scene mode)
 ├── render_scene.py            THE generator — run it to regenerate everything
 └── bitmaps/
-    ├── widget/                320×320 (80×80 @ 4 px/cell)
+    ├── widget/                     320×320 (80×80 @ 4 px/cell)
     │   ├── <state>.png × 4    review / reference
     │   └── scene_assets.rs    AUTO-GENERATED — const u8 RGBA (A=0xFF), embedded by
-    │                          the widget via #[path] (widget/src/main.rs)
+    │                          the widget via #[path] (desktop-llama/src/main.rs)
     └── device/                480×480 (80×80 @ 6 px/cell — full-bleed square panel)
         ├── <state>.png × 4    review / reference
-        ├── <state>.bin × 4    480×480 RGB565 LE (byte-identical to an lv_color_t buffer)
-        └── (consumed by) esp32c6_480x480/firmware/plumber_scene.h
+        └── (consumed by) amoled-panel-llama/firmware/plumber_scene.h
                                AUTO-GENERATED — four `scene_<state>_data` arrays
 ```
 
@@ -50,19 +49,19 @@ python shared/scene-assets/render_scene.py     # needs Pillow
 ```
 
 That rewrites `bitmaps/widget/*`, `bitmaps/device/*`, **and**
-`esp32c6_480x480/firmware/plumber_scene.h`. The two generated files must be
+`amoled-panel-llama/firmware/plumber_scene.h`. The two generated files must be
 committed together with any change to `render_scene.py`.
 
 ## How each target uses them
 
-- **Widget** (`widget/src/main.rs`): `mod scene_assets`
+- **Widget** (`desktop-llama/src/main.rs`): `mod scene_assets`
   (`#[path = "../../shared/scene-assets/bitmaps/widget/scene_assets.rs"]`).
   `scene_images()` uploads the four day states via `ctx.load_texture` (egui
   0.36 `Painter::image` takes a `TextureId`); each scene band is a blit of
   the matching state. The bitmaps are **static** (the animation is gone —
   that's the point of bitmaps); the old 8 fps repaint cadence is kept for
   chrome responsiveness only.
-- **Device** (`esp32c6_480x480/firmware/firmware.ino`): `plumber_scene.h`
+- **Device** (`amoled-panel-llama/firmware/firmware.ino`): `plumber_scene.h`
   gives four `scene_<state>_data` RGB565 arrays in rodata (~1.8 MB total —
   480×480, **full-bleed square**: the whole panel is scene, sky at the top
   and ground at the bottom, no letterbox bands). They wrap into

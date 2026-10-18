@@ -5,7 +5,7 @@ so given the same live server they should agree on phase, model, and (while
 generating) a sane tok/s. This script:
 
   1. captures the widget in each deterministic scene mode
-     (`DESKBUDDY_SCENE` + `EFRAME_SCREENSHOT_TO` — see widget/tests/screenshot_test.rs)
+     (`DESKBUDDY_SCENE` + `EFRAME_SCREENSHOT_TO` — see desktop-llama/tests/screenshot_test.rs)
      -> widget_*.png, plus a golden-match check;
   2. drives the ESP32 device through its states over USB-CDC:
        - `idle`: two consecutive `poll: idle` lines, then `CAP`;
@@ -42,7 +42,7 @@ from PIL import Image, ImageDraw
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
-WIDGET_DIR = os.path.join(ROOT, "widget")
+WIDGET_DIR = os.path.join(ROOT, "desktop-llama")
 WIDGET_BIN = os.path.join(WIDGET_DIR, "target", "debug", "deskbuddy_widget.exe")
 GOLDEN_DIR = os.path.join(WIDGET_DIR, "tests", "snapshots")
 SCENES = ["generating", "idle", "down", "prompting"]
@@ -84,7 +84,7 @@ def build_widget():
             os.environ["PATH"] = shim + os.pathsep + os.environ["PATH"]
         else:
             sys.exit("cargo not found — run with --build after installing Rust")
-    log("building widget (cargo build in widget/) ...")
+    log("building widget (cargo build in desktop-llama/) ...")
     subprocess.run(["cargo", "build"], cwd=WIDGET_DIR, check=True)
     if not os.path.exists(WIDGET_BIN):
         sys.exit(f"widget binary not found after build: {WIDGET_BIN}")

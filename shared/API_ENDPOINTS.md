@@ -1,6 +1,6 @@
 # DeskBuddy — llama.cpp API Endpoint Probe (live)
 
-Companion to [`esp32c6_480x480/PRODUCT_SPEC.md`](../esp32c6_480x480/PRODUCT_SPEC.md) §3. This
+Companion to [`amoled-panel-llama/PRODUCT_SPEC.md`](../amoled-panel-llama/PRODUCT_SPEC.md) §3. This
 records a **live probe of the actual server** the device will talk to, to
 confirm which endpoints are real and exactly which fields exist. Run this
 (or `shared/tools/probe.sh`) before M1 to re-verify.
