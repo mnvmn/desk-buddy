@@ -221,12 +221,17 @@ static inline void m_bolt(int cx, int cy) {
 // bolt 95/96/99; snow 71/73/75/77/85/86; sun 0; part 1/2; rain >=51; else cloud.
 // (No day/night split — the 1-bit panel always shows the sun glyph for code 0.)
 static inline void strip_icon(int cx, int cy, int code) {
+  // Optical alignment on one vertical axis (cy): cloud-body glyphs (m_cloud,
+  // m_part) are shifted so their cloud CENTRES land on cy — m_part draws its cloud
+  // 4px below its anchor, so it needs -1 (not +3) to match a bare m_cloud (+3,
+  // whose body centre is 3px above its anchor). Symmetric glyphs (m_sun/m_snow/
+  // m_bolt) sit on cy directly; m_rain keeps +4 so its cloud+drop mass centres on cy.
   if (code == 95 || code == 96 || code == 99) m_bolt(cx, cy);
   else if (code == 71 || code == 73 || code == 75 || code == 77 || code == 85 || code == 86) m_snow(cx, cy);
   else if (code == 0) m_sun(cx, cy);
-  else if (code == 1 || code == 2) m_part(cx, cy);
-  else if (code >= 51 || code >= 71) m_rain(cx, cy);
-  else m_cloud(cx, cy);
+  else if (code == 1 || code == 2) m_part(cx, cy - 1);
+  else if (code >= 51 || code >= 71) m_rain(cx, cy + 4);
+  else m_cloud(cx, cy + 3);
 }
 
 // ---- left-column info-row glyphs (tiny, sit on paper) -----------------------

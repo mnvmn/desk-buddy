@@ -3,7 +3,9 @@
 > Status: **bring-up done.** The Elecrow CrowPanel 5.79" e-paper HMI
 > (272×792, 1-bit, ESP32-S3) powers up, renders pre-rendered 1bpp bitmaps,
 > joins Wi-Fi, and does a live TLS-verified weather fetch (Open-Meteo),
-> showing the weather page (net-status page as offline fallback).
+> showing the weather page **and a travel page** (rotary-switched, 2026-10-18;
+> Munich removed). On a failed fetch a shared **error page** (warning triangle +
+> source + message) is drawn instead of the old baked status bitmap.
 > Current firmware: `fw/weather_test` — live weather: fetches Open-Meteo and
 > draws the **v2 layout** in C (`draw_ui`): three info rows at the top of the
 > left column (daylight temp / daylight wind / rain-state), big temp + `DOW DD`
@@ -79,21 +81,73 @@
   4-icon row at the **bottom** (single row). Also fixed a pre-existing firmware
   typo: the wind row printed `ms` instead of `m/s` (missing `/` glyph).
   ✅ **Left-column spacing/rhythm pass 2026-10-18** (web + firmware, same
-  numbers): uniform vertical rhythm — ink gaps **17/17** between the three
-  info rows (rows at y 32/62/92), **15** to the big temp (y 120), **18** to
-  `DOW DD` (y 165), **17** to the city (y 195), **21** to the icon row
-  (`ICY=239`, ink 222..251); top margin 32, bottom 21 — heavier elements get
+  numbers): uniform vertical rhythm — ink gaps **19/19** between the three
+  info rows (rows at y 16/49/82), **17** to the big temp (y 113), **20** to
+  `DOW DD` (y 161), **19** to the city (y 194), **21** to the icon row
+  (`ICY=236`, ink 218..248); top margin 16, bottom 22 — heavier elements get
   proportionally more air. This pass also fixed a firmware porting gap: the
   curve's hour labels lacked the web's clamp into `[CX0, CX1]`, so the edge
   labels stuck 12px out of the curve area.
-  Host-verified pixel-identical after both passes (`tools/host_render.cpp`
+  ✅ **Optical icon alignment 2026-10-18** (web `stripIcon` + firmware
+  `strip_icon`): the 4 left-row icons (and the 2-day strip) align on the cloud
+  BODY, not the bounding box — `mCloud` +3 / `mPart` −1 (its cloud is drawn 4px
+  below its anchor, so −1 puts its body on the same centre line as a bare
+  `mCloud`) / `mSun` 0 / `mRain` +4 / `mSnow` 0 / `mBolt` 0. Every cloud now
+  shares one flat bottom + body centre and the sun ring centres on `ICY`.
+  Host-verified pixel-identical after all passes (`tools/host_render.cpp`
   vs a live `?mode=mock` capture): **4 px total residual**, all on the
   rain-state drop glyph (pre-existing sub-glyph dither); icon row / info
-  rows / strip / curve all 0 px. ✅ **Flashed 2026-10-18** (twice;
-  `tools/flash_test.sh` COM4) and confirmed on-device: new layout + spacing
-  live, golden re-captured to `tools/device_v23_capture.png` (+ `..._2x.png`;
-  the device's left column is pixel-identical to the web mock, buffer rotated
-  180°). `web/shot_v2_mock.png` regenerated from the final web mock.
+  rows / strip / curve all 0 px. ✅ **Flashed 2026-10-18** (four times;
+  `tools/flash_test.sh` COM4) and confirmed on-device: new layout + spacing +
+  optical icon alignment live, golden re-captured to
+  `tools/device_v24_capture.png` (+ `..._2x.png`; the device's left column is
+  pixel-identical to the web mock, buffer rotated 180°).
+  `web/shot_v2_mock.png` regenerated from the final web mock.
+
+## Pages: Weather + Travel (2026-10-18)
+
+The panel is a **two-page** app, switched by the **rotary up/down detent**
+(firmware `toggle_page()`; web: click the canvas; serial `PAGE` for a headless
+test). A **rotary press force-refreshes** the current page. `cur_page`
+(0=weather, 1=travel) is persisted to NVS (`page`).
+
+- **Munich removed.** The old two-city toggle (Bratislava | Munich) is gone —
+  the weather page shows a single city (**Bratislava**). `CITIES` is a single
+  entry and the serial `CITY` command became `PAGE`. The rotary **up/down
+  detent** switches *page* (weather ↔ travel); a **press force-refreshes** it.
+- **Travel page** (`fw/weather_test/panel_travel.h/.cpp`; web
+  `web/panel_v2/travel_{data,icons,ui}.js`): three equal line columns
+  (**32** Dlhé diely · **49** Kramáre NÚSCH · **44** Koliba) at Karpatská under
+  a full-width header (stop + `DOW DD` + clock). Each row shows the scheduled
+  time + an `IN nM` countdown + a late/live/scheduled tick. Data = imhd real-time
+  feed (near term, ~45 min) merged with the IDS BK GTFS timetable (far term),
+  served by the LAN daemon
+  [`epaper-panel-travel/tools/serve_next_hour.py`](../../epaper-panel-travel/README.md)
+  (`GET /next-hour.json`, default `0.0.0.0:8341`, background-cached so a GET is
+  instant). The data pipeline, API research, and live/mock tools all live in
+  `epaper-panel-travel/`.
+- **Verification**: the firmware travel render is **pixel-identical to the web** —
+  `tools/host_render_travel.cpp` (the real `panel_travel.cpp` on a stubbed 1bpp
+  canvas) vs a live `?mode=mock&page=travel` capture: **0 px diff** over all
+  217600 px. Firmware compiles clean (1,042,759 B = 79% flash, 87,628 B = 26% RAM).
+- **Font**: travel labels are uppercase with diacritics folded, and avoid `X`/`Z`
+  (missing from the firmware 5×7 font) — `DLHE DIELY`, `KRAMARE NUSCH`, `KOLIBA`.
+- **Error page** (firmware `panel_error.h/.cpp`, web `error_ui.js`): a failed
+  fetch draws a shared centered page — warning triangle + source (scale 4) +
+  message (scale 4) + footer (scale 2). Weather: `WEATHER`/`NO WEATHER DATA`/
+  `RETRYING` (data) or `NO CONNECTION`/`CHECK WIFI` (Wi-Fi down); travel:
+  `KARPATSKA`/`NO TRAVEL DATA`/`DAEMON OFFLINE` (data) or `NO CONNECTION`/
+  `CHECK WIFI`. Replaces the 26 KB `gImage_status` bitmap (saves flash);
+  pixel-identical to the web (`tools/host_render_error.cpp` vs
+  `?state=weather-data`): **0 px diff**.
+- **Deployed + verified on hardware 2026-10-18**: flashed via
+  `tools/flash_test.sh` (COM4). Confirmed the rotary up/down page toggle (live
+  Open-Meteo weather), the travel page, and the travel error page (CAP
+  framebuffer, 7462 ink px). The travel page refreshes on a 5-min cadence
+  (`TRAVEL_REFRESH_MS`) vs the weather's 30-min (1 h at quiet hours); live travel
+  data needs the daemon reachable from the panel's subnet — the panel is on
+  `192.168.5.x` and the daemon target `192.168.4.23` is a different subnet, so
+  the travel page shows the error page until they share a LAN.
 
 ## Key gotchas (details in the docs)
 

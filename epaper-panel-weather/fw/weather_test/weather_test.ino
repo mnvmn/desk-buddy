@@ -1,23 +1,23 @@
 // Desk-buddy CrowPanel 5.79" e-paper: LIVE weather app (persistent).
 //
-// Keeps the panel live and re-fetches Open-Meteo every 30 minutes - every
-// 1 hour during quiet hours (21:00-05:00 local). Full refresh each cycle,
-// which doubles as a ghosting-clear. Two cities are configured
-// (Bratislava default, Munich); pressing the side rotary switch toggles
-// between them (choice persisted in flash). Each city shows its own live
-// 13h forecast, local clock and sunset.
+// Two PAGES share the panel, toggled by the side rotary switch (choice
+// persisted in flash): WEATHER (Bratislava, Open-Meteo live forecast + clock
+// + sunset, re-fetched every 30 min / 1 h during quiet hours 21:00-05:00) and
+// TRAVEL (Karpatská bus departures, lines 32/49/44 — merged from the imhd.sk
+// live feed + IDS BK GTFS schedule by a host daemon, re-fetched every 5 min).
+// Full refresh each cycle, which doubles as a ghosting-clear.
 //
 // Input: rotary switch (the side switch) - UP IO6 / DOWN IO4 / PRESS IO5,
-//   all active-low with pull-ups (Elecrow wiring). PRESS toggles city; any
-//   detent edge also triggers an immediate refresh.
+//   all active-low with pull-ups (Elecrow wiring). Turning UP/DOWN toggles the
+//   PAGE (no press needed); pressing the knob force-refreshes the current page.
 //
 // Serial protocol (for headless verification):
 //   CAP -> streams the current framebuffer as base64 lines between
 //          CAP_START and CAP_END (the app now stays awake; CAP is always live).
 //   CAL -> print now/sunset hours
-//   CITY -> toggle city + re-fetch (mirrors the side switch)
-//   STATE DRY|RAIN|SNOW|STORM|RESET -> override the rain-state row
-//   MOCK hh:mm -> redraw the live data as if now were hh:mm
+//   PAGE -> toggle PAGE (weather <-> travel) + re-fetch (mirrors the side switch)
+//   STATE DRY|RAIN|SNOW|STORM|RESET -> override the rain-state row (weather page)
+//   MOCK hh:mm -> redraw the weather page as if now were hh:mm
 //
 // Module map (all in this directory):
 //   panel_canvas.h   shared canvas: framebuffer, pixel setter, layout, pins
@@ -26,8 +26,9 @@
 //   panel_data.h     weather data model (WxCity / WXDay / WX)
 //   panel_net.h/.cpp raw mbedTLS HTTPS GET
 //   panel_fetch.h/.cpp Open-Meteo fetch + JSON parsing + date/weather helpers
-//   panel_ui.h/.cpp  panel rendering (curve, 2-day strip, full UI)
-//   panel_state.h/.cpp globals + wifi / refresh / render / capture
+//   panel_ui.h/.cpp  weather-page rendering (curve, 2-day strip, full UI)
+//   panel_travel.h/.cpp travel page: data model, rendering, JSON parse + fetch
+//   panel_state.h/.cpp globals + wifi / refresh / render / capture + page toggle
 //   weather_test.ino serial commands + setup()/loop() (control flow only)
 
 #include <Preferences.h>
@@ -57,8 +58,8 @@ static void poll_serial() {
           Serial.println();
         } else if (strstr(buf, "CAP")) {
           do_capture();
-        } else if (strstr(buf, "CITY")) {
-          toggle_city("ser");   // headless toggle test (mirrors the side switch)
+        } else if (strstr(buf, "PAGE")) {
+          toggle_page("ser");   // headless page toggle test (mirrors the side switch)
         } else if (!strncmp(buf, "STATE", 5)) {
           // test aid: override the rain-state classification to preview a state
           const char *st = (buf[5] == ' ') ? buf + 6 : buf + 5;
@@ -90,7 +91,7 @@ void setup() {
   Serial.begin(115200);
   delay(50);
   Serial.println();
-  Serial.println("== desk-buddy 5.79 e-paper: weather (persistent) ==");
+  Serial.println("== desk-buddy 5.79 e-paper: weather + travel (persistent) ==");
 
   pinMode(EPD_PWR_PIN, OUTPUT);
   digitalWrite(EPD_PWR_PIN, HIGH);
@@ -103,10 +104,11 @@ void setup() {
 
   Preferences prefs;
   prefs.begin("wx", false);
-  int saved = prefs.getInt("city", 0);
-  if (saved < 0 || saved >= N_CITIES) saved = 0;
-  cur_city = saved;
-  Serial.printf("city: %s (index %d)\n", CITIES[cur_city].name, cur_city);
+  int savedPage = prefs.getInt("page", PAGE_WEATHER);
+  if (savedPage != PAGE_WEATHER && savedPage != PAGE_TRAVEL) savedPage = PAGE_WEATHER;
+  cur_page = savedPage;
+  cur_city = 0;   // single city (Bratislava)
+  Serial.printf("page: %s (city %s)\n", cur_page == PAGE_TRAVEL ? "travel" : "weather", CITIES[cur_city].name);
 
   memset(&wx, 0, sizeof(wx));
   for (int i = 0; i < 13; i++) wx.temps[i] = NAN;
@@ -134,23 +136,28 @@ void setup() {
 void loop() {
   poll_serial();
 
-  // button debounce: simple rising-edge detect on the (active-low) rotary pins
+  // rotary input: an UP/DOWN detent edge TOGGLES the PAGE — turn the knob to
+  // switch between weather/travel, no press needed (the old press-to-toggle is
+  // gone). Pressing the knob force-refreshes the current page (the detent's old
+  // job). Simple rising-edge detect on the (active-low) rotary pins.
   static bool lastPress = false, lastUp = false, lastDown = false;
   bool p = !digitalRead(BTN_PRESS);
   bool u = !digitalRead(BTN_UP);
   bool d = !digitalRead(BTN_DOWN);
-  if (p && !lastPress) { toggle_city("btn"); }              // rotary pressed: toggle city
-  if ((u && !lastUp) || (d && !lastDown)) {                 // detent edge: immediate refresh
-    Serial.println("btn: detent -> refresh");
+  if ((u && !lastUp) || (d && !lastDown)) toggle_page("btn");   // rotate up/down: toggle page
+  if (p && !lastPress) {                                        // press: force-refresh now
+    Serial.println("btn: press -> refresh");
     bool ok = refresh_data();
     render_and_show(ok);
   }
   lastPress = p; lastUp = u; lastDown = d;
 
   if (!wifi_ok) ensure_wifi();             // opportunistic reconnect
-  uint32_t interval = current_refresh_ms();
-  if (millis() - lastTick >= interval) {  // periodic refresh (30 min, 1 h at night)
-    Serial.printf("tick: %s refresh\n", interval == REFRESH_MS_NIGHT ? "1h night" : "30-min");
+  // Travel refreshes more often (buses move); weather uses the day/quiet cadence.
+  uint32_t interval = (cur_page == PAGE_TRAVEL) ? TRAVEL_REFRESH_MS : current_refresh_ms();
+  if (millis() - lastTick >= interval) {  // periodic refresh of the current page
+    Serial.printf("tick: %s refresh\n",
+                  cur_page == PAGE_TRAVEL ? "travel 5-min" : (interval == REFRESH_MS_NIGHT ? "1h night" : "30-min"));
     bool ok = refresh_data();
     render_and_show(ok);
     lastTick = millis();

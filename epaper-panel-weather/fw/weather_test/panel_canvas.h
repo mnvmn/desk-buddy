@@ -17,11 +17,12 @@ extern uint8_t ImageBW[272 * 800 / 8];
 #define EPD_PWR_PIN 7
 
 // Input: the side rotary switch (active-low, pull-ups — Elecrow wiring)
-#define BTN_PRESS  5   // rotary press / center -> toggle cit
+#define BTN_PRESS  5   // rotary press / center -> toggle PAGE (weather <-> travel)
 #define BTN_UP     6   // rotary up
 #define BTN_DOWN   4   // rotary down
 #define REFRESH_MS       (30UL * 60UL * 1000UL)       // 30 minutes (daytime)
 #define REFRESH_MS_NIGHT (1UL  * 60UL * 60UL * 1000UL) // 1 hour, quiet hours 21:00–05:00
+#define TRAVEL_REFRESH_MS (5UL * 60UL * 1000UL)        // 5 min (travel page; buses move)
 
 // ---- layout constants (mirror tools/sim_weather_ui.py) --------------------
 #define CX0   240
@@ -30,7 +31,7 @@ extern uint8_t ImageBW[272 * 800 / 8];
 #define CY_B  166
 #define IX0   20
 #define IGAP  52
-#define ICY   239   // left icon row: single row, bottom of the left column
+#define ICY   236   // left icon row: optical center line, bottom of the left column
 #define CH_Y  214
 #define CH_H  40
 
@@ -41,6 +42,11 @@ extern uint8_t ImageBW[272 * 800 / 8];
 // proven-good EPD_ShowPicture path relies on (plain landscape x,y). We author
 // in landscape mockup coordinates (mx,my) in [0..791]x[0..271] and pass them
 // through untouched.
+// Bounds-guarded: an out-of-range pixel is dropped, never written. The real
+// Paint_SetPixel (EDP) has no bounds check, so an OOB coordinate would corrupt
+// memory adjacent to the framebuffer (crash). The host stub clamps the same way,
+// keeping host pixel-diffs honest.
 static inline void cv_set(int mx, int my, uint16_t c) {
+  if (mx < 0 || my < 0 || mx >= EPD_W || my >= EPD_H) return;
   Paint_SetPixel(mx, my, c);
 }

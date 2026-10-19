@@ -1,0 +1,2 @@
+# cached GTFS zip (auto-downloaded by tools/gtfs_next_hour.py)
+*.zip

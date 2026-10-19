@@ -8,7 +8,7 @@
 
 /* ---- layout ---- */
 const CX0=240, CX1=770, CY_T=16, CY_B=166;
-const IX0=20, IGAP=52, ICY=239;   // left icon row: single row, bottom of the left column
+const IX0=20, IGAP=52, ICY=236;   // left icon row: optical center line, bottom of the left column
 let WX=null;
 
 function isDaytime(h){ if(!WX||WX.now_hour<0) return true; const cur=WX.now_hour*60+WX.now_min;
@@ -90,10 +90,10 @@ function drawUI(){
   // left: CURRENT INFO rows (sc2) — TOP of the left column, glyph at x~15-28, text at x=42
   // (row order: temp range, wind, rain state — same as before, moved from the bottom)
   const rs=rainState(); const amt=fmtNum(WX.rain_total,1)+'MM';
-  if(rs==='STORM'){ sBolt(28,98); putText(42,92,'STORM',INK,2); }
-  else if(rs==='SNOW'){ sSnow(26,98); putText(putText(42,92,'SNOW ',INK,2),92,amt,INK,2); }
-  else if(rs==='RAIN'){ rowRain(25,95); putText(putText(42,92,'RAIN ',INK,2),92,amt,INK,2); }
-  else { rowRain(25,95); putText(42,92,'DRY',INK,2); }
+  if(rs==='STORM'){ sBolt(28,88); putText(42,82,'STORM',INK,2); }
+  else if(rs==='SNOW'){ sSnow(26,88); putText(putText(42,82,'SNOW ',INK,2),82,amt,INK,2); }
+  else if(rs==='RAIN'){ rowRain(25,85); putText(putText(42,82,'RAIN ',INK,2),82,amt,INK,2); }
+  else { rowRain(25,85); putText(42,82,'DRY',INK,2); }
   //  daylight min/max of temp + wind (13h window, day hours only; fallback: all hours)
   let lo=Infinity,hi=-Infinity,wLo=Infinity,wHi=-Infinity;
   for(let i=0;i<13;i++){ if(!isDaytime(i)) continue;
@@ -103,16 +103,16 @@ function drawUI(){
   if(!isFinite(wLo)){ for(let i=0;i<13;i++){ const w=WX.winds?WX.winds[i]:null; if(isFinite(w)){ if(w<wLo)wLo=w; if(w>wHi)wHi=w; } } }
   if(!isFinite(lo)){ lo=0; hi=0; } if(!isFinite(wLo)){ wLo=0; wHi=0; }
   //  wind interval (daylight, m/s)
-  rowWind(15,66); putText(42,62,fmtNum(wLo,1)+RANGE_SEP+fmtNum(wHi,1)+' m/s',INK,2);
+  rowWind(15,53); putText(42,49,fmtNum(wLo,1)+RANGE_SEP+fmtNum(wHi,1)+' m/s',INK,2);
   //  temp range (daylight, °C)
-  rowTherm(26,36); const rng=fmtNum(lo,1)+RANGE_SEP+fmtNum(hi,1)+'°C'; putText((rng[0]==='1'?40:42),32,rng,INK,2);
+  rowTherm(26,20); const rng=fmtNum(lo,1)+RANGE_SEP+fmtNum(hi,1)+'°C'; putText((rng[0]==='1'?40:42),16,rng,INK,2);
 
   // left: big current temp (sc4) centered in left column
-  const b=fmtNum(WX.cur,1); let nx=14+Math.floor((210-b.length*24)/2); if(nx<14)nx=14; putText(nx,120,b,INK,4);
+  const b=fmtNum(WX.cur,1); let nx=14+Math.floor((210-b.length*24)/2); if(nx<14)nx=14; putText(nx,113,b,INK,4);
   // left: current day (sc2) on top, city (sc1, smaller) below
   const dl=dayLabel(new Date().toISOString().slice(0,10));
-  nx=14+Math.floor((210-dl.length*12)/2); if(nx<14)nx=14; putText(nx,165,dl,INK,2);
-  const nm=cityName(); nx=14+Math.floor((210-nm.length*6)/2); if(nx<14)nx=14; putText(nx,195,nm,INK,1);
+  nx=14+Math.floor((210-dl.length*12)/2); if(nx<14)nx=14; putText(nx,161,dl,INK,2);
+  const nm=cityName(); nx=14+Math.floor((210-nm.length*6)/2); if(nx<14)nx=14; putText(nx,194,nm,INK,1);
 
   // left: 4 condition icons — 4 equal parts from now to midnight, IDENTICAL
   // logic to the 2-day strip (blockCode + stripIcon). SINGLE ROW at the bottom

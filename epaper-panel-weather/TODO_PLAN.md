@@ -22,9 +22,18 @@ spacing pass, which added the missing curve hour-label clamp into
 `[CX0, CX1]`). The swap also exposed + fixed a pre-existing firmware
 typo: the wind row printed `ms` instead of `m/s` (missing `/` glyph).
 The spacing pass set the left-column vertical rhythm to ink gaps
-17/17/15/18/17/21 (top 32 / bottom 21): info rows y 32/62/92, big temp
-y 120, `DOW DD` y 165, city y 195, icon row `ICY=239` — identical in
+19/19/17/20/19/21 (top 16 / bottom 22): info rows y 16/49/82, big temp
+y 113, `DOW DD` y 161, city y 194, icon row `ICY=236` — identical in
 `ui.js` and `panel_ui.cpp`/`panel_canvas.h`.
+**Optical icon alignment 2026-10-18** (web `stripIcon` + firmware
+`strip_icon`): the 4 left-row icons (and the 2-day strip) now align on the
+cloud BODY, not the bounding box — `mCloud` +3 / `mPart` −1 (its cloud is
+drawn 4px below its anchor, so −1 puts its body on the same centre line as a
+bare `mCloud`) / `mSun` 0 / `mRain` +4 / `mSnow` 0 / `mBolt` 0. Result: every
+cloud shares one flat bottom (y245) + body centre, the sun ring centres on
+`ICY`, and `mPart`'s sun peeks above — verified on the web mock AND a live
+on-device capture (`tools/device_v24_capture.png`, left-column bands
+16/49/82/113/161/194/218..248 = pixel-identical to the web).
 The ESP32 firmware **compiles clean** (`tools/flash_test.sh` FQBN, 78% flash /
 26% RAM). `web/shot_v2_mock.png` was **regenerated 2026-10-18** from the live
 v2.1 web mock (mock mode, new layout: info rows top, icon row bottom).
@@ -72,11 +81,15 @@ been replaced:
  layout live (info rows top, 4-icon single row bottom) and the golden was
  re-captured to `tools/device_v22_capture.png` (+ `..._2x.png`; the older
  `device_v21_capture*.png` pre-dates the swap — buffer is rotated 180° vs the
- web mock). **Re-flashed a 3rd time 2026-10-18 after the spacing/rhythm
+ Re-flashed a 3rd time 2026-10-18 after the spacing/rhythm
  pass** (also carrying the curve hour-label clamp fix): on-device capture
  `tools/device_v23_capture.png` (+ `..._2x.png`) — the device's left column
  is pixel-identical to the web mock (same band y-extents: 32/62/92/120/165/
- 195/222..251).
+ 195/222..251). **Re-flashed a 4th time 2026-10-18 after the optical icon
+ alignment** (cloud-body centring, `mPart` −1): on-device capture
+ `tools/device_v24_capture.png` — left column pixel-identical to the web
+ (bands 16/49/82/113/161/194/218..248) and the current-day icon row's clouds
+ share one flat bottom on hardware.
   **Also a latent parse bug was fixed on the way in**:
   `parse_num_array` was writing float bit-patterns into the int `codes` array
   (3.0f → 0x40400000) so every icon read as cloud; it now parses to a float

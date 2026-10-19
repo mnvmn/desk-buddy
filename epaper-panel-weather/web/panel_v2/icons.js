@@ -71,12 +71,17 @@ function drawMoonPhase(cx,cy,r,phase){
   }
 }
 function stripIcon(cx,cy,code){
+  // Optical alignment on one vertical axis (cy): cloud-body glyphs (mCloud,
+  // mPart) are shifted so their cloud CENTRES land on cy — mPart draws its cloud
+  // 4px below its anchor, so it needs -1 (not +3) to match a bare mCloud (+3,
+  // whose body centre is 3px above its anchor). Symmetric glyphs (mSun/mSnow/
+  // mBolt) sit on cy directly; mRain keeps +4 so its cloud+drop mass centres on cy.
   if(code===95||code===96||code===99) mBolt(cx,cy);
   else if(code===71||code===73||code===75||code===77||code===85||code===86) mSnow(cx,cy);
   else if(code===0) mSun(cx,cy);
-  else if(code===1||code===2) mPart(cx,cy);
-  else if(code>=51||code>=71) mRain(cx,cy);
-  else mCloud(cx,cy);
+  else if(code===1||code===2) mPart(cx,cy-1);
+  else if(code>=51||code>=71) mRain(cx,cy+4);
+  else mCloud(cx,cy+3);
 }
 
 /* small left-column info row: tiny glyph + text (sc1) */

@@ -3,10 +3,10 @@
 #include "panel_canvas.h"
 
 struct WxCity { const char *name; const char *lat; const char *lon; };
-// Second+ cities are defined in panel_state.cpp (Bratislava comes from the
-// shared net_config.h).
-extern const WxCity CITIES[2];
-static const int N_CITIES = 2;
+// Single weather city (Munich removed 2026-10-18): the side rotary PRESS now
+// toggles the PAGE (weather <-> travel view) instead of switching city.
+extern const WxCity CITIES[1];
+static const int N_CITIES = 1;
 
 // One forecast day for the 2-day strip (tomorrow + day-after).
 struct WXDay {

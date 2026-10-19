@@ -28,9 +28,8 @@ WX wx;
 int cur_city = 0;
 bool wifi_ok = false;
 uint32_t lastTick = 0;
-const WxCity CITIES[2] = {
+const WxCity CITIES[1] = {
   {"BRATISLAVA", "48.1476", "17.1067"},
-  {"MUNICH",     "48.1351", "11.5820"},
 };
 HostSerial Serial;
 int HostSerial::printf(const char *fmt, ...) {

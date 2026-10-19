@@ -211,13 +211,13 @@ void draw_ui() {
     int ap = fmt_num(amt, wx.rain_total, 1);
     amt[ap] = 'M'; amt[ap + 1] = 'M'; amt[ap + 2] = 0;
     if (strcmp(rs, "STORM") == 0) {
-      s_bolt(28, 98); put_text(42, 92, "STORM", INK, 2);
+      s_bolt(28, 88); put_text(42, 82, "STORM", INK, 2);
     } else if (strcmp(rs, "SNOW") == 0) {
-      s_snow(26, 98); int x = put_text(42, 92, "SNOW ", INK, 2); put_text(x, 92, amt, INK, 2);
+      s_snow(26, 88); int x = put_text(42, 82, "SNOW ", INK, 2); put_text(x, 82, amt, INK, 2);
     } else if (strcmp(rs, "RAIN") == 0) {
-      row_rain(25, 95); int x = put_text(42, 92, "RAIN ", INK, 2); put_text(x, 92, amt, INK, 2);
+      row_rain(25, 85); int x = put_text(42, 82, "RAIN ", INK, 2); put_text(x, 82, amt, INK, 2);
     } else {
-      row_rain(25, 95); put_text(42, 92, "DRY", INK, 2);
+      row_rain(25, 85); put_text(42, 82, "DRY", INK, 2);
     }
   }
   // daylight min/max of temp + wind (13h window, day hours; fallback: all)
@@ -237,8 +237,8 @@ void draw_ui() {
     ws[p++] = '-';
     p += fmt_num(ws + p, wHi, 1);
     ws[p++] = ' '; ws[p++] = 'm'; ws[p++] = '/'; ws[p++] = 's'; ws[p] = 0;
-    row_wind(15, 66);
-    put_text(42, 62, ws, INK, 2);
+    row_wind(15, 53);
+    put_text(42, 49, ws, INK, 2);
   }
   {   // temp range (daylight, °C) — 0xB0 degree byte -> glyph 41
     char tr[16];
@@ -246,8 +246,8 @@ void draw_ui() {
     tr[p++] = '-';
     p += fmt_num(tr + p, hi, 1);
     tr[p++] = 0xB0; tr[p++] = 'C'; tr[p] = 0;
-    row_therm(26, 36);
-    put_text(tr[0] == '1' ? 40 : 42, 32, tr, INK, 2);
+    row_therm(26, 20);
+    put_text(tr[0] == '1' ? 40 : 42, 16, tr, INK, 2);
   }
 
   // left: big current temp (4x), centered in the left column
@@ -257,7 +257,7 @@ void draw_ui() {
     int tw = cn * 24;
     int nx = 14 + (210 - tw) / 2;
     if (nx < 14) nx = 14;
-    put_text(nx, 120, b, INK, 4);
+    put_text(nx, 113, b, INK, 4);
   }
 
   // left: current day label "DOW DD" (sc2), e.g. "SUN 18"
@@ -268,7 +268,7 @@ void draw_ui() {
     int dlw = strlen(dl) * 12;
     int nx = 14 + (210 - dlw) / 2;
     if (nx < 14) nx = 14;
-    put_text(nx, 165, dl, INK, 2);
+    put_text(nx, 161, dl, INK, 2);
   }
   // left: city name (sc1), centered under the day label
   {
@@ -276,7 +276,7 @@ void draw_ui() {
     int nw = text_w(nm, 1);
     int nx = 14 + (210 - nw) / 2;
     if (nx < 14) nx = 14;
-    put_text(nx, 195, nm, INK, 1);
+    put_text(nx, 194, nm, INK, 1);
   }
 
   // v2.1 icons: 4 MEDIUM glyphs, one per EQUAL part from "now" to midnight
