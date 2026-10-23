@@ -15,7 +15,7 @@ function isDaytime(h){ if(!WX||WX.now_hour<0) return true; const cur=WX.now_hour
   const t=(cur+h*60)%1440;
   if(WX.sunrise_hour>=0&&WX.sunset_hour>=0){ const sr=WX.sunrise_hour*60+WX.sunrise_min, ss=WX.sunset_hour*60+WX.sunset_min;
     return sr<ss ? (t>=sr&&t<ss) : (t>=sr||t<ss); } return t>=300&&t<1020; }
-function slotRange(i,pxA,out){ out.x0=i===0?Math.max(CX0,pxA[0]-3):Math.floor((pxA[i]+pxA[i-1])/2); out.x1=i===12?pxA[12]+3:Math.floor((pxA[i]+pxA[i+1])/2); }
+function slotRange(i,pxA,out){ out.x0=i===0?pxA[0]-3:Math.floor((pxA[i]+pxA[i-1])/2); out.x1=i===12?pxA[12]+3:Math.floor((pxA[i]+pxA[i+1])/2); }
 
 /* classify the 13h window: DRY / RAIN / SNOW / STORM (severity priority) */
 function rainState(){
@@ -83,7 +83,8 @@ function drawTempCurve(){
     for(let b=0;b<trans.length;b++){ const i=trans[b],d=dt[b]; const r=Math.floor((d+15)/30)*30;
       const s=(r%60===0)?(r/60)+'h':(Math.floor(r/60)+'.5h'); const bx=Math.floor((px[i]+px[i+1])/2); const bw=s.length*12;
       let lx=bx-Math.floor(bw/2); if(lx<CX0-6)lx=CX0-6; if(lx+bw>CX1+6)lx=CX1+6-bw; fillRect(lx-10,0,lx+bw+10,20,PAPER); putText(lx,3,s,INK,2);
-      if(night[b]){ let mx=lx+bw+15; if(mx+7>CX1+2)mx=CX1-5; fillRect(mx-9,0,mx+9,20,PAPER); drawMoonPhase(mx,10,7,moonPhase()); } } }
+      if(night[b]){ let mx=lx+bw+15; if(mx+7>CX1+2)mx=CX1-5; fillRect(mx-9,0,mx+9,20,PAPER); drawMoonPhase(mx,10,7,moonPhase()); }
+      else { let mx=lx-15; if(mx-7<CX0-2)mx=CX0+5; fillRect(mx-9,0,mx+9,20,PAPER); drawMoonPhase(mx,10,7,moonPhase()); } } }
 }
 
 function drawUI(){
@@ -110,7 +111,7 @@ function drawUI(){
   // left: big current temp (sc4) centered in left column
   const b=fmtNum(WX.cur,1); let nx=14+Math.floor((210-b.length*24)/2); if(nx<14)nx=14; putText(nx,113,b,INK,4);
   // left: current day (sc2) on top, city (sc1, smaller) below
-  const dl=dayLabel(new Date().toISOString().slice(0,10));
+  const dl=dayLabel((WX&&WX.source==='mock')?'2026-10-18':new Date().toISOString().slice(0,10));
   nx=14+Math.floor((210-dl.length*12)/2); if(nx<14)nx=14; putText(nx,161,dl,INK,2);
   const nm=cityName(); nx=14+Math.floor((210-nm.length*6)/2); if(nx<14)nx=14; putText(nx,194,nm,INK,1);
 

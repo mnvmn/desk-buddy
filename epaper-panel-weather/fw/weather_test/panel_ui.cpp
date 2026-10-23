@@ -165,6 +165,11 @@ static void draw_temp_curve() {
         if (mx + 7 > CX1 + 2) mx = CX1 - 5;
         fill_rect(mx - 9, 0, mx + 9, 20, PAPER);
         draw_moon_phase(mx, 10, 7, moon_phase());
+      } else {          // F17: same glyph before the "till morning" countdown (left of text)
+        int mx = lx - 15;
+        if (mx - 7 < CX0 - 2) mx = CX0 + 5;
+        fill_rect(mx - 9, 0, mx + 9, 20, PAPER);
+        draw_moon_phase(mx, 10, 7, moon_phase());
       }
     }
   }

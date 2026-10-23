@@ -14,6 +14,7 @@
 #include <cstring>
 #include <cmath>
 #include <cstdarg>
+#include <cstdlib>
 
 #include "panel_canvas.h"
 #include "panel_fetch.h"
@@ -80,7 +81,7 @@ static void mock_daylight(const float *t, float *lo, float *hi) {
   }
 }
 
-int main() {
+int main(int argc, char **argv) {
   // ---- current (now=12:30), exactly as web/panel_v2/data.js mockWx ----------
   wx.cur = 15.6f; wx.feels = 12.4f; wx.wind = 9.7f; wx.code = 3;
   const float temps[13] = {15.0f,16.2f,17.0f,17.5f,17.4f,16.9f,15.6f,14.4f,13.3f,13.0f,13.2f,14.1f,14.0f};
@@ -91,7 +92,10 @@ int main() {
   // NOTE: the mock does NOT override temps[0]=cur (that's live-path only), so
   // temps[0]=15.0 while cur=15.6 — reproduce that exactly.
   wx.rain_total = 0.0f;
-  wx.now_hour = 12; wx.now_min = 30;
+  // now defaults to the mock's 12:30; override with argv[1]=hour argv[2]=min
+  // (e.g. `host_render 20 0` to render the sunrise "till morning" transition).
+  wx.now_hour = argc > 1 ? atoi(argv[1]) : 12;
+  wx.now_min  = argc > 2 ? atoi(argv[2]) : 30;
   wx.sunrise_hour = 7; wx.sunrise_min = 15;
   wx.sunset_hour  = 17; wx.sunset_min  = 57;
   wx.now_year = 2026; wx.now_month = 10; wx.now_day = 18;  // today (UTC) — must match the web mock's wall-clock date

@@ -1,9 +1,29 @@
 # TODO plan — epaper-panel-weather
 
-**Updated:** 2026-10-18 · Open work for the CrowPanel 5.79" e-paper project.
+**Updated:** 2026-10-19 · Open work for the CrowPanel 5.79" e-paper project.
 The web mockup `web/panel_v2/` is the source of truth. The v2.1 delta detail
 in item 1 was merged in from `V2_UI_PORT_PLAN.md` (deleted 2026-10-17; its
 completed F1–F19 port history remains in git history).
+
+**Sunrise moon + mock determinism 2026-10-19** (web + firmware): the
+moon-phase glyph now appears on the **morning** edge to mirror the existing
+**night** edge — the "till morning" (sunrise) countdown carries the same moon
+glyph **to the LEFT of the text** (the "till night" sunset glyph stays on the
+right, unchanged). Web `ui.js` + firmware `panel_ui.cpp` (mirrored
+coordinates: `mx = lx - 15`, clamped to `CX0 + 5`). Also made the offline mock
+**deterministic** (frozen reference date 2026-10-18, matching
+`tools/host_render.cpp`): the mock was tracking the live wall clock
+(`new Date()` / `Date.now()`) for the DOW label, 2-day-strip dates, and moon
+phase, so it drifted a day a day away from the host + reference shot — now
+`web ?mode=mock` is reproducible and the host-harness diff is back to the
+documented ~4 px (rain-drop glyph) at any `now`. That exposed + fixed a
+related pre-existing web/host delta the sunrise path (now at night) hit: the
+night-band left edge — web `slotRange` clamped slot 0 to `CX0` while firmware
+`slot_range` (and the right edge) extend 3px past the plot edge; web now
+matches (`pxA[0]-3`). `tools/host_render` gained optional `argv[1]=hour
+argv[2]=min` (default 12:30) to render a non-default `now` (e.g.
+`host_render 20 0` for the sunrise path). `web/shot_v2_mock.png` regenerated
+— now exactly reproducible from the deterministic mock.
 
 ## 1. v2.1 firmware re-port — PORTED + HOST-VERIFIED (flash + golden CAP remain)
 

@@ -32,10 +32,10 @@ function mockDayTemps(mid, amp){ const t=new Array(24);
   for(let h=0;h<24;h++) t[h]=Math.round((mid+amp*Math.cos((h-14)/24*2*Math.PI))*10)/10; return t; }
 function mockWx(){
   const srH=7.25, ssH=17.95; // Bratislava late-Oct sunrise/sunset (approx, hours)
-  const d0={ date:addDays(new Date().toISOString().slice(0,10),1), code:3,
+  const d0={ date:addDays('2026-10-18',1), code:3,
     codes:[3,3,3,3,3,3,3,1,1,2,0,0,0,0,1,0,0,0,0,0,0,0,0,0],
     temps:mockDayTemps(14,6), rain:0.0, pprob:0, lo:0, hi:0 };
-  const d1={ date:addDays(new Date().toISOString().slice(0,10),2), code:1,
+  const d1={ date:addDays('2026-10-18',2), code:1,
     codes:[0,0,0,1,3,3,2,1,1,1,1,0,0,0,0,1,2,3,3,2,1,1,1,1],
     temps:mockDayTemps(10,5), rain:0.4, pprob:10, lo:0, hi:0 };
   const r0=daylightRange(d0.temps,srH,ssH); d0.lo=r0.lo; d0.hi=r0.hi;

@@ -50,7 +50,10 @@ function sBolt(cx,cy){ thickLine(cx+2,cy-4,cx-1,cy,INK,1); thickLine(cx-1,cy,cx+
 function moonPhase(){
   const synodic=29.53058867; // days
   const ref=Date.UTC(2000,0,6,18,14)/86400000; // 2000-01-06 18:14 UTC (known new moon)
-  let p=(((Date.now()/86400000)-ref)%synodic)/synodic; if(p<0)p+=1;
+  // FROZEN reference date for the offline mock (2026-10-18, matches
+  // tools/host_render.cpp), using the mock's own now; live mode tracks the wall clock.
+  const now=(WX&&WX.source==='mock')?Date.UTC(2026,9,18,WX.now_hour,WX.now_min):Date.now();
+  let p=(((now/86400000)-ref)%synodic)/synodic; if(p<0)p+=1;
   return p;
 }
 // Draw a moon-phase glyph (lit=INK, dark=PAPER) centred at (cx,cy), radius r.

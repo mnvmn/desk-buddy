@@ -56,8 +56,10 @@
   daylight wind interval (lo-hi m/s) + a rain STATE (DRY / RAIN / SNOW / STORM,
   from the 13h WMO
   `weather_code` — storm & snow get procedural bolt/snowflake icons). The
-  curve's "time to night" label carries a live **moon-phase glyph** on its
-  right (synodic cycle from the 2000-01-06 new moon; lit = ink). Same live/mock
+  curve's "time to night" / "time to morning" transition labels each carry a
+  live **moon-phase glyph** (synodic cycle from the 2000-01-06 new moon; lit =
+  ink) — to the RIGHT of the sunset countdown, to the LEFT of the sunrise
+  countdown. Same live/mock
   (`?mode=mock|live`; `&state=DRY|RAIN|SNOW|STORM` previews a state); daylight
   lo-hi uses sunrise/sunset. Extends the firmware 5×7 font (indices 0-39) with
   extras — `°` (41), `m` (44), `s` (45) plus separator candidates `~`/`>`/`_`
