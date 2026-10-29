@@ -1,0 +1,203 @@
+{
+  "model": {
+    "name": "Qwen-Image-Edit-2511 (fp8mixed)",
+    "unet": "qwen_image_edit_2511_fp8mixed.safetensors",
+    "text_encoder": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+    "text_encoder_loader": "CLIPLoader type=qwen_image",
+    "vae": "qwen_image_vae.safetensors",
+    "weight_dtype": "default"
+  },
+  "generated_at": "2026-10-25T15:32:58+00:00",
+  "generator": {
+    "host": "m.tower1 (192.168.4.75), RTX 5090",
+    "comfyui": "http://192.168.4.75:8188 (ComfyUI 0.42.0, native Windows, C:\\comfy\\ComfyUI)",
+    "api": "POST /prompt, poll /history/{id}, fetch /view"
+  },
+  "source_assets": {
+    "dir": "C:\\Users\\m\\Documents\\desk-buddy\\shared\\scene-assets\\bitmaps\\device",
+    "files": {
+      "idle.png": "480x480 NES-style pixel art desert: cactus, bushes, sun, clouds, grass/dirt",
+      "working.png": "480x480 NES-style pixel art: hero in red cap + blue overalls beside green warp pipe",
+      "prompting.png": "480x480 NES-style pixel art: hero in red cap beside green warp pipe",
+      "down.png": "480x480 NES-style pixel art: piranha plant in pipe with green warp pipe"
+    }
+  },
+  "approaches": {
+    "text-to-image": "EmptyLatentImage + TextEncodeQwenImageEdit + KSampler (denoise 1.0)",
+    "image-to-image": "LoadImage + VAEEncode + KSampler (denoise 0.2-0.5), text conditioning via CLIPTextEncode",
+    "high-detail/low-noise": "50 steps + karras schedule, and/or denoise 0.2 refinement pass on a previous output"
+  },
+  "images": [
+    {
+      "file": "qwen_01_t2i_mario.png",
+      "approach": "text-to-image",
+      "prompt": "8-bit retro pixel art scene in the style of a classic NES platformer: a small hero character in a red cap and blue overalls stands on bright green grass in front of a green warp pipe, light blue sky with a yellow sun and fluffy white clouds, chunky visible pixels, limited flat color palette, clean side-view game background",
+      "negative": "blurry, smooth, photorealistic, anti-aliased, gradient, text, watermark, logo, low contrast, muddy colors, deformed, extra limbs",
+      "source": null,
+      "settings": {
+        "width": 1536,
+        "height": 864,
+        "seed": 42,
+        "steps": 30,
+        "cfg": 1.0,
+        "sampler": "euler",
+        "scheduler": "simple",
+        "denoise": 1.0
+      },
+      "prompt_id": "34547014-410a-4338-aee6-36f9b3de882c",
+      "server_file": "qwen_01_00001_.png",
+      "elapsed_s": 27.3,
+      "dimensions": "1536x864",
+      "file_size_bytes": 1131756,
+      "output_path": "C:\\Users\\m\\Documents\\desk-buddy\\shared\\scene-assets\\bitmaps\\device\\benchmark\\qwen-image\\qwen_01_t2i_mario.png"
+    },
+    {
+      "file": "qwen_02_t2i_piranha.png",
+      "approach": "text-to-image",
+      "prompt": "8-bit retro pixel art in classic NES style: a red piranha plant with sharp white teeth popping out of a brown pipe, next to a tall green warp pipe, sunny light blue sky, yellow pixel sun in the top left, two small white clouds, green grass strip over brown soil ground, chunky blocky pixels, limited color palette, flat colors",
+      "negative": "blurry, smooth, photorealistic, anti-aliased, gradient, text, watermark, logo, low contrast, muddy colors, deformed, extra limbs",
+      "source": null,
+      "settings": {
+        "width": 1024,
+        "height": 1024,
+        "seed": 1337,
+        "steps": 40,
+        "cfg": 1.0,
+        "sampler": "dpmpp_2m",
+        "scheduler": "karras",
+        "denoise": 1.0
+      },
+      "prompt_id": "1f57e4f9-188f-4fa3-b220-ddcb9cb9904f",
+      "server_file": "qwen_02_00001_.png",
+      "elapsed_s": 24.2,
+      "dimensions": "1024x1024",
+      "file_size_bytes": 1329996,
+      "output_path": "C:\\Users\\m\\Documents\\desk-buddy\\shared\\scene-assets\\bitmaps\\device\\benchmark\\qwen-image\\qwen_02_t2i_piranha.png"
+    },
+    {
+      "file": "qwen_03_i2i_desert_repaint.png",
+      "approach": "image-to-image (classic VAEEncode, denoise 0.5)",
+      "prompt": "Keep exactly the same scene and composition: the tall green cactus on the left, the round bushes on the right, the green grass strip and brown dirt soil at the bottom, and the clouds. Change only the lighting to night: deep indigo night sky, a big yellow full moon with crater pixels, scattered small white star pixels. Do not add any characters or animals. Flat retro 8-bit pixel colors, chunky visible pixels.",
+      "negative": "day, sun, characters, animals, people, blurry, smooth, photorealistic, anti-aliased, text, watermark, deformed",
+      "source": "C:\\Users\\m\\Documents\\desk-buddy\\shared\\scene-assets\\bitmaps\\device\\idle.png",
+      "settings": {
+        "width": 480,
+        "height": 480,
+        "seed": 111111,
+        "steps": 30,
+        "cfg": 1.0,
+        "sampler": "euler",
+        "scheduler": "simple",
+        "denoise": 0.5
+      },
+      "prompt_id": "4ace9ae4-5a09-4a6a-8286-132d91f2f16e",
+      "server_file": "qwen_03c_00001_.png",
+      "elapsed_s": 9.1,
+      "note": "Prompt asked for a night conversion but the model preserved the source's daytime sky (also at denoise 0.75); output is a faithful pixel-level repaint of the source scene. This is the model's img2img behavior, documented as a finding.",
+      "dimensions": "480x480",
+      "file_size_bytes": 104880,
+      "output_path": "C:\\Users\\m\\Documents\\desk-buddy\\shared\\scene-assets\\bitmaps\\device\\benchmark\\qwen-image\\qwen_03_i2i_desert_repaint.png"
+    },
+    {
+      "file": "qwen_04_i2i_sunset_hero.png",
+      "approach": "image-to-image (classic VAEEncode, denoise 0.45)",
+      "prompt": "8-bit retro pixel art, the same hero character in a red cap and blue overalls standing by the green warp pipe, now under a warm orange sunset sky with a low pixel sun, keep the chunky pixel style and flat colors, classic NES platformer background",
+      "negative": "day, sun, characters, animals, people, blurry, smooth, photorealistic, anti-aliased, text, watermark, deformed",
+      "source": "C:\\Users\\m\\Documents\\desk-buddy\\shared\\scene-assets\\bitmaps\\device\\working.png",
+      "settings": {
+        "width": 480,
+        "height": 480,
+        "seed": 222222,
+        "steps": 25,
+        "cfg": 1.0,
+        "sampler": "res_multistep",
+        "scheduler": "karras",
+        "denoise": 0.45
+      },
+      "prompt_id": "37280a5e-c344-4e5c-84d4-85fb0da8ae6d",
+      "server_file": "qwen_04_00001_.png",
+      "elapsed_s": 9.1,
+      "note": "Sunset prompt not applied (daytime sky kept); character + pipe preserved faithfully at denoise 0.45.",
+      "dimensions": "480x480",
+      "file_size_bytes": 122534,
+      "output_path": "C:\\Users\\m\\Documents\\desk-buddy\\shared\\scene-assets\\bitmaps\\device\\benchmark\\qwen-image\\qwen_04_i2i_sunset_hero.png"
+    },
+    {
+      "file": "qwen_05_hd_low_noise_desert.png",
+      "approach": "high-detail / low-noise (img2img refinement of qwen_03, denoise 0.2)",
+      "prompt": "Refine this 8-bit pixel art desert scene: add crisp fine detail - dithered grass texture, cactus spine pixels, cloud shadow pixels, sun ray pixels - keep the exact composition, shapes and flat retro colors, low noise, high detail",
+      "negative": "blurry, smooth, photorealistic, anti-aliased, characters, animals, text, watermark, deformed, grain, noise",
+      "source": "qwen_03_i2i_desert_repaint.png (derived output)",
+      "settings": {
+        "width": 480,
+        "height": 480,
+        "seed": 333333,
+        "steps": 50,
+        "cfg": 1.0,
+        "sampler": "euler",
+        "scheduler": "karras",
+        "denoise": 0.2
+      },
+      "prompt_id": "45cbd923-f040-4f5f-a10b-241271bc3e5e",
+      "server_file": "qwen_05_00001_.png",
+      "elapsed_s": 15.1,
+      "dimensions": "480x480",
+      "file_size_bytes": 132750,
+      "output_path": "C:\\Users\\m\\Documents\\desk-buddy\\shared\\scene-assets\\bitmaps\\device\\benchmark\\qwen-image\\qwen_05_hd_low_noise_desert.png"
+    },
+    {
+      "file": "qwen_06_t2i_cactus_hd.png",
+      "approach": "high-detail / low-noise (T2I, 50 steps, karras schedule)",
+      "prompt": "High-detail 8-bit retro pixel art desert scene in classic NES style: tall segmented green cactus with fine spine pixels on the left, rounded bushes on the right, bright green grass strip over brown dirt soil, light blue sky, yellow pixel sun in the top left, two fluffy white clouds with grey shadow pixels, chunky well-aligned pixel grid, crisp clean edges, limited flat color palette, meticulous pixel placement",
+      "negative": "blurry, smooth, photorealistic, anti-aliased, gradient, text, watermark, logo, low contrast, muddy colors, deformed, extra limbs",
+      "source": null,
+      "settings": {
+        "width": 1536,
+        "height": 864,
+        "seed": 444444,
+        "steps": 50,
+        "cfg": 1.0,
+        "sampler": "euler",
+        "scheduler": "karras",
+        "denoise": 1.0
+      },
+      "prompt_id": "a2e862c8-3edd-41dd-b3d5-4cb2ae7c5f3f",
+      "server_file": "qwen_06_00001_.png",
+      "elapsed_s": 33.2,
+      "dimensions": "1536x864",
+      "file_size_bytes": 1627523,
+      "output_path": "C:\\Users\\m\\Documents\\desk-buddy\\shared\\scene-assets\\bitmaps\\device\\benchmark\\qwen-image\\qwen_06_t2i_cactus_hd.png"
+    },
+    {
+      "file": "qwen_07_t2i_night_desert.png",
+      "approach": "text-to-image (night variant of the idle.png scene)",
+      "prompt": "8-bit retro pixel art night desert scene in the style of a classic NES platformer: tall green cactus on the left, rounded bushes on the right, green grass strip over brown dirt soil, deep indigo night sky, a big yellow full moon with crater pixels, scattered small white star pixels, chunky visible pixels, limited flat color palette",
+      "negative": "blurry, smooth, photorealistic, anti-aliased, gradient, text, watermark, logo, low contrast, muddy colors, deformed, characters, animals",
+      "source": null,
+      "settings": {
+        "width": 1536,
+        "height": 864,
+        "seed": 555555,
+        "steps": 30,
+        "cfg": 1.0,
+        "sampler": "euler",
+        "scheduler": "simple",
+        "denoise": 1.0
+      },
+      "prompt_id": "d29860ee-fc0f-4d0c-aab6-f7edb8f71fd9",
+      "server_file": "qwen_07_00001_.png",
+      "elapsed_s": 21.2,
+      "note": "Night theme realized via T2I because img2img preserved the source daytime sky (see qwen_03 note).",
+      "dimensions": "1536x864",
+      "file_size_bytes": 1184172,
+      "output_path": "C:\\Users\\m\\Documents\\desk-buddy\\shared\\scene-assets\\bitmaps\\device\\benchmark\\qwen-image\\qwen_07_t2i_night_desert.png"
+    }
+  ],
+  "findings": [
+    "T2I quality is excellent for this style: crisp chunky pixels, correct palettes, no artifacts at 1024x1024 and 1536x864.",
+    "cfg 1.0 is the appropriate guidance for this model (no CFG boost used); all runs used cfg 1.0.",
+    "Classic img2img (VAEEncode) strongly preserves the source scene: semantic prompt changes (night sky, sunset) were NOT applied at denoise 0.45-0.75; the model keeps the source's daytime sky. Use high denoise or T2I for semantic edits.",
+    "Native Qwen-Image-Edit conditioning (TextEncodeQwenImageEdit with image input, denoise 1.0, 480x480) was unreliable: two attempts (seeds/prompts varied) hallucinated an unrelated character portrait (anthropomorphic rabbit with checkered shirt) from the cactus source, discarding the scene. Not used in the final set.",
+    "480x480 latents render very fast (~9-15 s); 1536x864 takes ~21-33 s on the RTX 5090."
+  ]
+}

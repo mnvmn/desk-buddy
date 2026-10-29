@@ -1,0 +1,208 @@
+{
+  "model": {
+    "unet": "flux1-dev-fp8.safetensors",
+    "clip_l": "clip_l.safetensors",
+    "t5xxl": "t5xxl_fp8_e4m3fn.safetensors",
+    "vae": "ae.safetensors",
+    "base": "black-forest-labs FLUX.1-dev (fp8)"
+  },
+  "generated_at": "2026-10-25T15:48:02.992Z",
+  "host": "http://192.168.4.75:8188",
+  "source_assets_dir": "C:/Users/m/Documents/desk-buddy/shared/scene-assets/bitmaps/device",
+  "images": [
+    {
+      "id": "01",
+      "file": "flux_01_txt2img_idle.png",
+      "approach": "text-to-image",
+      "prompt": "retro 16-bit pixel art video game landscape, bright sunny light blue sky, yellow square sun with jagged rays in the upper left, two small blocky white clouds, rolling green hills on the horizon, round green bushes, brown dirt ground with darker texture marks, a small green signpost on the left, flat solid colors, limited vibrant palette, nostalgic 90s era, crisp clean pixels, no anti aliasing",
+      "negative_prompt": "",
+      "settings": {
+        "sampler": "euler",
+        "scheduler": "beta",
+        "steps": 20,
+        "cfg": 1,
+        "width": 1024,
+        "height": 1024,
+        "seed": 1001,
+        "denoise": 1
+      },
+      "source_files": [],
+      "output_path": "C:\\Users\\m\\Documents\\desk-buddy\\shared\\scene-assets\\bitmaps\\device\\benchmark\\flux-dev\\flux_01_txt2img_idle.png",
+      "comfyui": {
+        "prompt_id": "f1cc2404-08f4-40b8-a0d4-ece67df75259",
+        "filename": "flux_01_idle_00001_.png",
+        "subfolder": "",
+        "node": "9"
+      },
+      "ok": true,
+      "gen_seconds": 13.9
+    },
+    {
+      "id": "02",
+      "file": "flux_02_txt2img_character.png",
+      "approach": "text-to-image",
+      "prompt": "retro 16-bit pixel art video game character, a small friendly robot desk buddy with a red cap and white rectangular visor eyes, beige face, brown beard, red shirt and blue overalls with a yellow belt buckle, standing on a green grass platform next to a green warp pipe, sunny light blue sky, flat solid colors, limited vibrant palette, nostalgic, crisp clean pixels, centered composition",
+      "negative_prompt": "",
+      "settings": {
+        "sampler": "dpmpp_2m",
+        "scheduler": "karras",
+        "steps": 28,
+        "cfg": 2,
+        "width": 1024,
+        "height": 1024,
+        "seed": 2002,
+        "denoise": 1
+      },
+      "source_files": [],
+      "output_path": "C:\\Users\\m\\Documents\\desk-buddy\\shared\\scene-assets\\bitmaps\\device\\benchmark\\flux-dev\\flux_02_txt2img_character.png",
+      "comfyui": {
+        "prompt_id": "756b23e5-635c-4453-ac9e-7fc0c5f51887",
+        "filename": "flux_02_char_00001_.png",
+        "subfolder": "",
+        "node": "9"
+      },
+      "ok": true,
+      "gen_seconds": 23.1
+    },
+    {
+      "id": "03",
+      "file": "flux_03_txt2img_widescreen.png",
+      "approach": "text-to-image (widescreen resolution)",
+      "prompt": "retro 16-bit pixel art side scroller video game scene, wide view, a small robot desk buddy character with a red cap and blue overalls walking across a long green grass platform, two green warp pipes, a red piranha plant with a toothy grin peeking from one pipe, sunny sky with blocky white clouds, yellow sun, flat solid colors, limited vibrant palette, nostalgic platformer aesthetic, crisp clean pixels",
+      "negative_prompt": "",
+      "settings": {
+        "sampler": "euler",
+        "scheduler": "simple",
+        "steps": 24,
+        "cfg": 1.5,
+        "width": 1344,
+        "height": 768,
+        "seed": 3003,
+        "denoise": 1
+      },
+      "source_files": [],
+      "output_path": "C:\\Users\\m\\Documents\\desk-buddy\\shared\\scene-assets\\bitmaps\\device\\benchmark\\flux-dev\\flux_03_txt2img_widescreen.png",
+      "comfyui": {
+        "prompt_id": "d11759ec-06c4-4d54-acad-fdedc3b0828b",
+        "filename": "flux_03_wide_00001_.png",
+        "subfolder": "",
+        "node": "9"
+      },
+      "ok": true,
+      "gen_seconds": 20
+    },
+    {
+      "id": "04",
+      "file": "flux_04_img2img_prompting.png",
+      "approach": "image-to-image from source bitmap (medium denoise)",
+      "prompt": "retro 16-bit pixel art, a friendly robot desk buddy character with a red cap, white visor eyes and blue overalls, standing on green grass next to a green warp pipe, sunny sky, enhanced detail, vibrant colors, crisp pixels",
+      "negative_prompt": "",
+      "settings": {
+        "sampler": "euler",
+        "scheduler": "beta",
+        "steps": 24,
+        "cfg": 1,
+        "width": 1024,
+        "height": 1024,
+        "seed": 4004,
+        "denoise": 0.55
+      },
+      "source_files": [
+        "prompting.png"
+      ],
+      "output_path": "C:\\Users\\m\\Documents\\desk-buddy\\shared\\scene-assets\\bitmaps\\device\\benchmark\\flux-dev\\flux_04_img2img_prompting.png",
+      "comfyui": {
+        "prompt_id": "546f77b9-4e16-42c5-9e7a-e8d79ec79a16",
+        "filename": "flux_04_img2img_p_00001_.png",
+        "subfolder": "",
+        "node": "11"
+      },
+      "ok": true,
+      "gen_seconds": 10.7
+    },
+    {
+      "id": "05",
+      "file": "flux_05_img2img_down.png",
+      "approach": "image-to-image from source bitmap (higher denoise)",
+      "prompt": "retro 16-bit pixel art, a red piranha plant with a wide toothy grin emerging from a green warp pipe, green grass, sunny light blue sky with blocky clouds, vibrant colors, enhanced detail, crisp clean pixels",
+      "negative_prompt": "",
+      "settings": {
+        "sampler": "dpmpp_2m_sde",
+        "scheduler": "karras",
+        "steps": 30,
+        "cfg": 1.5,
+        "width": 1024,
+        "height": 1024,
+        "seed": 5005,
+        "denoise": 0.7
+      },
+      "source_files": [
+        "down.png"
+      ],
+      "output_path": "C:\\Users\\m\\Documents\\desk-buddy\\shared\\scene-assets\\bitmaps\\device\\benchmark\\flux-dev\\flux_05_img2img_down.png",
+      "comfyui": {
+        "prompt_id": "e9e41c08-3c07-4a33-bafb-f9284b7ae668",
+        "filename": "flux_05_img2img_d_00001_.png",
+        "subfolder": "",
+        "node": "11"
+      },
+      "ok": true,
+      "gen_seconds": 27.6
+    },
+    {
+      "id": "06",
+      "file": "flux_06_denoise_low_idle.png",
+      "approach": "high-detail / low-noise refinement of source bitmap",
+      "prompt": "highly detailed retro 16-bit pixel art landscape, sharp crisp pixels, intricate texture on the grass and dirt ground, vivid saturated colors, professional video game background art, sunny sky, clouds, bushes, signpost",
+      "negative_prompt": "",
+      "settings": {
+        "sampler": "euler",
+        "scheduler": "beta",
+        "steps": 32,
+        "cfg": 1,
+        "width": 1024,
+        "height": 1024,
+        "seed": 6006,
+        "denoise": 0.25
+      },
+      "source_files": [
+        "idle.png"
+      ],
+      "output_path": "C:\\Users\\m\\Documents\\desk-buddy\\shared\\scene-assets\\bitmaps\\device\\benchmark\\flux-dev\\flux_06_denoise_low_idle.png",
+      "comfyui": {
+        "prompt_id": "769cbf63-1d4c-475c-873b-b5910b70a564",
+        "filename": "flux_06_lowden_00001_.png",
+        "subfolder": "",
+        "node": "11"
+      },
+      "ok": true,
+      "gen_seconds": 13.8
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "ok": 6,
+    "approaches": [
+      "text-to-image",
+      "text-to-image (widescreen resolution)",
+      "image-to-image from source bitmap (medium denoise)",
+      "image-to-image from source bitmap (higher denoise)",
+      "high-detail / low-noise refinement of source bitmap"
+    ]
+  },
+  "findings": [
+    "Text-to-image at 1024x1024 with euler/beta, cfg 1.0, 20-32 steps gives the crispest clean pixel-art output (flux_01, flux_06) - recommended Flux baseline.",
+    "Widescreen 1344x768 t2i (flux_03) works well for side-scroller compositions.",
+    "Higher CFG (2.0) with dpmpp_2m/karras (flux_02) came out slightly soft/blurry; keep CFG 1.0-1.5 for crisp pixels.",
+    "img2img at denoise 0.55-0.7 (flux_04, flux_05) preserves the source scene layout while enhancing detail; the low-noise 0.25 refinement (flux_06) is most faithful to the source structure.",
+    "Flux Dev is guidance-distilled: empty negative prompt + cfg ~1.0 is the standard; pushing cfg higher degrades quality rather than adding prompt adherence."
+  ],
+  "best_settings": {
+    "sampler": "euler",
+    "scheduler": "beta",
+    "steps": 20,
+    "cfg": 1,
+    "resolution": "1024x1024",
+    "note": "crisp NES pixel-art; see flux_01/flux_06"
+  }
+}

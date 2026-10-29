@@ -1,0 +1,9 @@
+# Cargo build output (the .exe lives here)
+/target
+
+# Optional: ignore lockfile for binary apps? No — keep Cargo.lock for reproducible builds.
+
+# Editor/OS
+*.swp
+.DS_Store
+.vscode/

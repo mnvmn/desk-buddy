@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1672">
+<title>Desk-buddy · e-paper travel (Karpatská) live</title>
+<link rel="stylesheet" href="./panel.css">
+</head>
+<body>
+<div class="page">
+  <div class="bar">
+    <div class="title">Desk-buddy · e-paper travel <span>/ 800&times;272 1-bit · Karpatská 32+49+44 · next hour</span></div>
+    <div class="pill" id="pill"><span class="dot"></span><span id="pillTxt">LOADING&hellip;</span></div>
+  </div>
+  <div class="device"><canvas id="panel" width="800" height="272"></canvas></div>
+  <div class="foot">
+    <div>Source: <b id="srcTxt">&mdash;</b></div>
+    <div>1-bit e-ink · paper #e9e7df / ink #18191c · 2&times; nearest-neighbour scale</div>
+  </div>
+</div>
+
+<!-- Travel design, split into modules in ./panel/ — SAME design system as the
+     weather panel (panel_v2/canvas.js + font.js copied verbatim; same 800x272
+     1-bit INK/PAPER buffer, same 5x7 glyph font, same dark-bezel page chrome).
+     Classic ordered <script> tags (NOT ES modules) because this file is opened
+     via file://, where module scripts are CORS-blocked. Load order is fixed:
+     canvas -> font -> icons -> ui -> data -> app. All share the global scope.
+     Query params: ?mode=auto|live|mock  &url=<json-url>  (mock = baked data) -->
+<script src="./panel/canvas.js"></script>
+<script src="./panel/font.js"></script>
+<script src="./panel/icons.js"></script>
+<script src="./panel/ui.js"></script>
+<script src="./panel/data.js"></script>
+<script src="./panel/app.js"></script>
+</body>
+</html>

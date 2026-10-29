@@ -1,0 +1,21 @@
+/* panel.css — page chrome around the 1-bit e-ink canvas (identical to the
+ * weather panel_v2 chrome: device bezel, status pill, source footer). The
+ * canvas itself is drawn by the panel/*.js modules. */
+:root{ --page-bg:#c9ccd1; --bezel:#14161a; --paper:#e9e7df; --ink:#18191c; }
+*{ box-sizing:border-box; margin:0; padding:0; }
+html,body{ background:var(--page-bg); }
+body{ font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:#2a2c30; -webkit-font-smoothing:antialiased; }
+.page{ width:1672px; padding:22px; background:var(--page-bg); display:flex; flex-direction:column; gap:16px; }
+.bar{ display:flex; align-items:center; justify-content:space-between; padding:2px 4px 0; }
+.bar .title{ font-size:14px; font-weight:600; letter-spacing:.3px; color:#3a3d42; }
+.bar .title span{ color:#7b7f86; font-weight:400; }
+.pill{ display:inline-flex; align-items:center; gap:8px; font-size:12px; font-weight:600; letter-spacing:.4px; padding:5px 12px; border-radius:999px; background:#ffffffaa; color:#2a2c30; box-shadow:0 1px 2px rgba(0,0,0,.12); }
+.pill .dot{ width:9px; height:9px; border-radius:50%; background:#9aa0a6; }
+.pill.live  .dot{ background:#1f9d55; box-shadow:0 0 0 3px #1f9d5522; }
+.pill.mock  .dot{ background:#d98a1f; box-shadow:0 0 0 3px #d98a1f22; }
+.pill.err   .dot{ background:#d64545; box-shadow:0 0 0 3px #d6454522; }
+.device{ width:1628px; background:var(--bezel); padding:14px; border-radius:22px; box-shadow:0 2px 0 #0006 inset,0 14px 30px rgba(0,0,0,.35),0 2px 6px rgba(0,0,0,.25); position:relative; }
+.device::after{ content:""; position:absolute; inset:14px; border-radius:10px; box-shadow:0 0 0 1px rgba(255,255,255,.06) inset; pointer-events:none; }
+canvas#panel{ display:block; width:1600px; height:544px; image-rendering:pixelated; image-rendering:crisp-edges; background:var(--paper); border-radius:8px; }
+.foot{ display:flex; align-items:center; justify-content:space-between; padding:0 4px; font-size:12px; color:#6f737a; letter-spacing:.2px; }
+.foot b{ color:#41454b; font-weight:600; }

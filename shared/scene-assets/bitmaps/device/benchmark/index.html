@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DeskBuddy — Scene Bitmap Benchmark · Qwen Image vs Flux Dev</title>
+<style>
+  :root{
+    --background:#f5f6f8;
+    --card:#ffffff;
+    --foreground:#1b1d22;
+    --muted:#5f656f;
+    --faint:#8a909a;
+    --accent:#4ec9b0;
+    --accent-ink:#128a78;
+    --border:rgba(0,0,0,.10);
+    --border-soft:rgba(0,0,0,.06);
+    --best:#e8a33d;
+    --best-ink:#9a6410;
+    --best-bg:#fff6e5;
+    --best-border:#f0c885;
+    --qwen:#7c5cff;
+    --flux:#ff7a59;
+    --shadow:0 1px 2px rgba(0,0,0,.04), 0 6px 18px rgba(0,0,0,.05);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--background); color:var(--foreground);
+    font:13.5px/1.55 ui-monospace,"Cascadia Mono",Consolas,"SF Mono",monospace;
+    padding:26px 22px 60px;
+  }
+  .wrap{max-width:1280px;margin:0 auto}
+  h1{font-size:19px;margin:0 0 4px;letter-spacing:-.01em}
+  h2{font-size:15px;margin:0}
+  .num{color:var(--accent-ink);margin-right:6px}
+  .desc{color:var(--muted);margin:6px 0 0;max-width:940px}
+  .desc b{color:var(--foreground)}
+  .meta-line{color:var(--faint);font-size:11.5px;margin:10px 0 0;letter-spacing:.02em}
+  .meta-line .dot{opacity:.5;margin:0 8px}
+
+  /* model summary cards */
+  .models{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0 8px}
+  .model{
+    background:var(--card);border:1px solid var(--border);border-radius:14px;
+    padding:16px 18px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+  }
+  .model::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px}
+  .model.qwen::before{background:var(--qwen)}
+  .model.flux::before{background:var(--flux)}
+  .model .mname{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px}
+  .model .mtag{font-size:10.5px;color:var(--muted);border:1px solid var(--border);border-radius:20px;padding:1px 8px;font-weight:400}
+  .model .msub{color:var(--muted);font-size:11.5px;margin:6px 0 12px}
+  .model .msub b{color:var(--foreground)}
+  .bestbox{
+    background:var(--best-bg);border:1px solid var(--best-border);border-radius:10px;
+    padding:10px 12px;
+  }
+  .bestbox .bt{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--best-ink);font-weight:700;display:flex;align-items:center;gap:6px}
+  .bestbox .bt .star{font-size:13px}
+  .bestbox .bs{font-size:12px;color:var(--foreground);margin-top:6px;line-height:1.6}
+  .bestbox .bs code{background:rgba(0,0,0,.05);padding:1px 5px;border-radius:4px;font-size:11.5px}
+  .bestbox .bn{color:var(--muted);font-size:11px;margin-top:6px}
+
+  /* legend */
+  .legend{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin:18px 0 4px;color:var(--muted);font-size:11.5px}
+  .legend .chip{display:inline-flex;align-items:center;gap:6px}
+  .legend .sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+  .legend .sw.q{background:var(--qwen)}
+  .legend .sw.f{background:var(--flux)}
+  .legend .sw.b{background:var(--best);border:1px solid var(--best-border)}
+
+  /* approach sections */
+  .section{margin-top:30px}
+  .section > h2{display:flex;align-items:baseline;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+  .section > .sdesc{color:var(--muted);font-size:12px;margin:6px 0 14px;max-width:940px}
+  .pair{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .side{border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.5);overflow:hidden}
+  .side .shead{
+    display:flex;align-items:center;gap:8px;padding:10px 14px;font-size:12.5px;font-weight:700;
+    border-bottom:1px solid var(--border);background:var(--card);
+  }
+  .side .shead .sw{width:11px;height:11px;border-radius:3px}
+  .side.qwen .shead .sw{background:var(--qwen)}
+  .side.flux .shead .sw{background:var(--flux)}
+  .side .shead .cnt{color:var(--faint);font-weight:400;font-size:11px;margin-left:auto}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;padding:14px}
+
+  /* image card */
+  .card{
+    background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;
+    display:flex;flex-direction:column;transition:box-shadow .15s,border-color .15s;position:relative;
+  }
+  .card:hover{box-shadow:var(--shadow)}
+  .card.best{border-color:var(--best);box-shadow:0 0 0 1px var(--best), var(--shadow)}
+  .card .ph{position:relative;background:#0d0e11}
+  .card .ph img{display:block;width:100%;height:auto;image-rendering:pixelated;cursor:zoom-in}
+  .card .badge{
+    position:absolute;top:8px;left:8px;background:var(--best);color:#3a2606;font-size:10px;
+    font-weight:800;letter-spacing:.08em;padding:3px 8px;border-radius:20px;box-shadow:0 1px 3px rgba(0,0,0,.25);
+    display:inline-flex;align-items:center;gap:4px;
+  }
+  .card .body{padding:10px 12px 12px;display:flex;flex-direction:column;gap:8px;flex:1}
+  .card .fname{font-size:12px;font-weight:700;word-break:break-all;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+  .card .fname .id{color:var(--faint);font-weight:400}
+  .ap-tag{font-size:9.5px;font-weight:600;letter-spacing:.02em;color:var(--muted);
+    background:rgba(0,0,0,.05);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px;white-space:normal}
+  .card .src{color:var(--muted);font-size:10.5px;margin-top:-2px}
+  .card .src b{color:var(--foreground);font-weight:600}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:11px}
+  .kv .k{color:var(--faint);white-space:nowrap;letter-spacing:.02em}
+  .kv .v{color:var(--foreground)}
+  .kv .v.hi{color:var(--accent-ink);font-weight:700}
+  .prompt{
+    font-size:10.8px;color:var(--muted);background:rgba(0,0,0,.025);border:1px solid var(--border-soft);
+    border-radius:7px;padding:7px 9px;line-height:1.5;cursor:pointer;
+  }
+  .prompt .ptxt{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .prompt.open .ptxt{display:block;-webkit-line-clamp:unset;white-space:pre-wrap}
+  .prompt .phint{color:var(--faint);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;margin-top:5px}
+  .prompt.open .phint{display:none}
+  .note{font-size:10.8px;color:var(--muted);border-left:2px solid var(--accent);padding:2px 0 2px 8px;line-height:1.5}
+  .note b{color:var(--foreground)}
+  .warn{color:var(--best-ink)}
+
+  /* findings */
+  .findings{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}
+  .fbox{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+  .fbox h3{margin:0 0 8px;font-size:12.5px;display:flex;align-items:center;gap:7px}
+  .fbox h3 .sw{width:11px;height:11px;border-radius:3px}
+  .fbox ul{margin:0;padding-left:16px}
+  .fbox li{font-size:11.5px;color:var(--muted);margin:5px 0;line-height:1.55}
+  .fbox li b{color:var(--foreground)}
+
+  .foot{color:var(--faint);font-size:11px;margin-top:34px;border-top:1px solid var(--border);padding-top:14px;line-height:1.6}
+  .foot code{background:rgba(0,0,0,.05);padding:1px 5px;border-radius:4px}
+  .foot .src-badge{display:inline-block;padding:1px 7px;border-radius:5px;font-size:10px;font-weight:700;letter-spacing:.04em}
+  .foot .src-badge.live{background:#e7f6f1;color:var(--accent-ink);border:1px solid #bfe6dc}
+  .foot .src-badge.embed{background:rgba(0,0,0,.05);color:var(--muted);border:1px solid var(--border)}
+
+  /* lightbox */
+  .lb{position:fixed;inset:0;background:rgba(8,9,12,.86);display:none;align-items:center;justify-content:center;
+      flex-direction:column;z-index:50;padding:30px;cursor:zoom-out}
+  .lb.on{display:flex}
+  .lb img{max-width:92vw;max-height:80vh;image-rendering:pixelated;border-radius:6px;box-shadow:0 10px 50px rgba(0,0,0,.6)}
+  .lb .cap{color:#cfd3da;font-size:12px;margin-top:14px;text-align:center;max-width:80vw}
+  .lb .cap b{color:#fff}
+
+  @media (max-width:860px){
+    .models,.pair,.findings{grid-template-columns:1fr}
+    body{padding:18px 12px 48px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>DeskBuddy · scene bitmap benchmark — <span style="color:var(--qwen)">Qwen Image</span> vs <span style="color:var(--flux)">Flux Dev</span></h1>
+  <p class="desc">
+    Side-by-side comparison of two image models generating <b>NES-style pixel-art scene bitmaps</b> for the DeskBuddy device
+    (cactus desert / hero + warp pipe / piranha plant). Both ran on <b>m.tower1 · RTX 5090 · ComfyUI 0.42.0</b>.
+    Grouped by generation approach so like techniques line up. <b style="color:var(--best-ink)">★ Best</b> cards are the
+    recommended settings for each model.
+  </p>
+  <p class="meta-line" id="meta-line">generated 2026-10-25<span class="dot">·</span>13 images (7 Qwen + 6 Flux)<span class="dot">·</span>data source: <span id="src-ind">…</span></p>
+
+  <!-- model summary + best settings -->
+  <div class="models" id="models"></div>
+
+  <!-- legend -->
+  <div class="legend">
+    <span class="chip"><span class="sw q"></span> Qwen Image — Qwen-Image-Edit-2511 (fp8mixed)</span>
+    <span class="chip"><span class="sw f"></span> Flux Dev — FLUX.1-dev (fp8)</span>
+    <span class="chip"><span class="sw b"></span> best-performing settings</span>
+    <span class="chip" style="margin-left:auto">click any image to zoom · click a prompt to expand</span>
+  </div>
+
+  <!-- approach sections -->
+  <div id="sections"></div>
+
+  <!-- findings -->
+  <div class="section">
+    <h2><span class="num">4</span>Findings per model</h2>
+    <div class="findings" id="findings"></div>
+  </div>
+
+  <div class="foot">
+    <div>
+      Assets: <code>qwen-image/*.png</code> + <code>qwen-image/metadata.json</code> ·
+      <code>flux-dev/*.png</code> + <code>flux-dev/metadata.json</code> — all referenced by relative path from this file.
+      The settings shown are read live from the two <code>metadata.json</code> files when served over http;
+      opened directly (<code>file://</code>) they fall back to an embedded snapshot taken 2026-10-25.
+      Data source: <span class="src-badge" id="src-badge">…</span>
+    </div>
+  </div>
+</div>
+
+<!-- lightbox -->
+<div class="lb" id="lb" onclick="this.classList.remove('on')">
+  <img id="lb-img" alt="">
+  <div class="cap" id="lb-cap"></div>
+</div>
+
+<script>
+/* ---- relative asset paths (into the sibling folders) ---- */
+const DIRS = { qwen:"qwen-image", flux:"flux-dev" };
+const META = { qwen:"qwen-image/metadata.json", flux:"flux-dev/metadata.json" };
+
+/* ---- best-performing settings (from each metadata.json) ---- */
+const BEST = {
+  qwen:{
+    badge:"BEST · T2I",
+    settings:"euler · simple · 30–50 steps · <code>cfg 1.0</code> · 1536×864 (or 1024²)",
+    note:"Crisp chunky pixels, correct palette, no artifacts. cfg 1.0 is the model's native guidance — no CFG boost used. Use T2I for semantic edits; classic img2img kept the source daytime sky.",
+    files:["qwen_06_t2i_cactus_hd.png","qwen_07_t2i_night_desert.png","qwen_01_t2i_mario.png","qwen_02_t2i_piranha.png"]
+  },
+  flux:{
+    badge:"BEST",
+    settings:"euler · beta · <code>cfg 1.0</code> · 20 steps · 1024×1024",
+    note:"Crispest clean pixel-art (flux_01 / flux_06). Widescreen 1344×768 is good for side-scrollers (flux_03). Guidance-distilled: keep cfg 1.0–1.5 — cfg 2.0 went soft.",
+    files:["flux_01_txt2img_idle.png","flux_06_denoise_low_idle.png"]
+  }
+};
+
+/* ---- embedded snapshot (fallback for file://). Mirrors the two metadata.json. ---- */
+const SNAPSHOT = {
+  qwen:{
+    model:"Qwen-Image-Edit-2511 (fp8mixed)",
+    modelSub:"UNet qwen_image_edit_2511_fp8mixed · text qwen_2.5_vl_7b_fp8 · VAE qwen_image_vae",
+    images:[
+      {file:"qwen_01_t2i_mario.png",id:"01",approach:"text-to-image",src:null,denoise:1.0,
+       settings:{sampler:"euler",scheduler:"simple",steps:30,cfg:1.0,width:1536,height:864,seed:42},
+       prompt:"8-bit retro pixel art scene in the style of a classic NES platformer: a small hero character in a red cap and blue overalls stands on bright green grass in front of a green warp pipe, light blue sky with a yellow sun and fluffy white clouds, chunky visible pixels, limited flat color palette, clean side-view game background",
+       note:"Crisp T2I at 1536×864 — clean side-view hero + warp pipe.",gen_s:27.3},
+      {file:"qwen_02_t2i_piranha.png",id:"02",approach:"text-to-image",src:null,denoise:1.0,
+       settings:{sampler:"dpmpp_2m",scheduler:"karras",steps:40,cfg:1.0,width:1024,height:1024,seed:1337},
+       prompt:"8-bit retro pixel art in classic NES style: a red piranha plant with sharp white teeth popping out of a brown pipe, next to a tall green warp pipe, sunny light blue sky, yellow pixel sun in the top left, two small white clouds, green grass strip over brown soil ground, chunky blocky pixels, limited color palette, flat colors",
+       note:"Piranha plant + warp pipe, 1024².",gen_s:24.2},
+      {file:"qwen_03_i2i_desert_repaint.png",id:"03",approach:"image-to-image",src:"idle.png",denoise:0.5,
+       settings:{sampler:"euler",scheduler:"simple",steps:30,cfg:1.0,width:480,height:480,seed:111111},
+       prompt:"Keep exactly the same scene and composition … Change only the lighting to night: deep indigo night sky, a big yellow full moon with crater pixels, scattered small white star pixels. Do not add any characters or animals.",
+       note:"Prompted night, but the model <b>kept the source daytime sky</b> (same at denoise 0.75) — faithful pixel-level repaint. Documented finding."},
+      {file:"qwen_04_i2i_sunset_hero.png",id:"04",approach:"image-to-image",src:"working.png",denoise:0.45,
+       settings:{sampler:"res_multistep",scheduler:"karras",steps:25,cfg:1.0,width:480,height:480,seed:222222},
+       prompt:"8-bit retro pixel art, the same hero character in a red cap and blue overalls standing by the green warp pipe, now under a warm orange sunset sky with a low pixel sun, keep the chunky pixel style and flat colors.",
+       note:"Sunset prompt not applied (daytime sky kept); character + pipe preserved faithfully."},
+      {file:"qwen_05_hd_low_noise_desert.png",id:"05",approach:"high-detail / low-noise",src:"qwen_03 (derived)",denoise:0.2,
+       settings:{sampler:"euler",scheduler:"karras",steps:50,cfg:1.0,width:480,height:480,seed:333333},
+       prompt:"Refine this 8-bit pixel art desert scene: add crisp fine detail — dithered grass texture, cactus spine pixels, cloud shadow pixels, sun ray pixels — keep the exact composition, shapes and flat retro colors, low noise, high detail.",
+       note:"50-step karras refinement (denoise 0.2) of qwen_03.",gen_s:15.1},
+      {file:"qwen_06_t2i_cactus_hd.png",id:"06",approach:"high-detail / low-noise (T2I)",src:null,denoise:1.0,
+       settings:{sampler:"euler",scheduler:"karras",steps:50,cfg:1.0,width:1536,height:864,seed:444444},
+       prompt:"High-detail 8-bit retro pixel art desert scene in classic NES style: tall segmented green cactus with fine spine pixels on the left, rounded bushes on the right, bright green grass strip over brown dirt soil, light blue sky, yellow pixel sun in the top left, two fluffy white clouds with grey shadow pixels, chunky well-aligned pixel grid, crisp clean edges, limited flat color palette, meticulous pixel placement.",
+       note:"50-step karras T2I — crisp cactus desert at 1536×864.",gen_s:33.2},
+      {file:"qwen_07_t2i_night_desert.png",id:"07",approach:"text-to-image (night)",src:null,denoise:1.0,
+       settings:{sampler:"euler",scheduler:"simple",steps:30,cfg:1.0,width:1536,height:864,seed:555555},
+       prompt:"8-bit retro pixel art night desert scene in the style of a classic NES platformer: tall green cactus on the left, rounded bushes on the right, green grass strip over brown dirt soil, deep indigo night sky, a big yellow full moon with crater pixels, scattered small white star pixels, chunky visible pixels, limited flat color palette.",
+       note:"Night theme realized via T2I (img2img preserved the source daytime sky).",gen_s:21.2}
+    ],
+    findings:[
+      "<b>T2I quality is excellent</b> for this style: crisp chunky pixels, correct palettes, no artifacts at 1024² and 1536×864.",
+      "<b>cfg 1.0</b> is the appropriate guidance (no CFG boost used); all runs used cfg 1.0.",
+      "Classic img2img (VAEEncode) <b>strongly preserves the source</b>: semantic prompt changes (night / sunset) were <b>not</b> applied at denoise 0.45–0.75 — the source daytime sky is kept. Use high denoise or T2I for semantic edits.",
+      "Native Qwen-Image-Edit conditioning (with image input) was unreliable: two attempts hallucinated an unrelated rabbit character from the cactus source — discarded.",
+      "480² latents render in ~9–15 s; 1536×864 in ~21–33 s on the RTX 5090."
+    ]
+  },
+  flux:{
+    model:"FLUX.1-dev (fp8)",
+    modelSub:"UNet flux1-dev-fp8 · T5-XXL fp8 · CLIP-L · VAE ae",
+    images:[
+      {file:"flux_01_txt2img_idle.png",id:"01",approach:"text-to-image",src:null,denoise:1.0,
+       settings:{sampler:"euler",scheduler:"beta",steps:20,cfg:1.0,width:1024,height:1024,seed:1001},
+       prompt:"retro 16-bit pixel art video game landscape, bright sunny light blue sky, yellow square sun with jagged rays in the upper left, two small blocky white clouds, rolling green hills on the horizon, round green bushes, brown dirt ground with darker texture marks, a small green signpost on the left, flat solid colors, limited vibrant palette, nostalgic 90s era, crisp clean pixels, no anti aliasing",
+       note:"Crisp idle landscape — the recommended Flux baseline.",gen_s:13.9},
+      {file:"flux_02_txt2img_character.png",id:"02",approach:"text-to-image",src:null,denoise:1.0,
+       settings:{sampler:"dpmpp_2m",scheduler:"karras",steps:28,cfg:2.0,width:1024,height:1024,seed:2002},
+       prompt:"retro 16-bit pixel art video game character, a small friendly robot desk buddy with a red cap and white rectangular visor eyes, beige face, brown beard, red shirt and blue overalls with a yellow belt buckle, standing on a green grass platform next to a green warp pipe, sunny light blue sky, flat solid colors, limited vibrant palette, nostalgic, crisp clean pixels, centered composition",
+       note:"<b class='warn'>cfg 2.0 / dpmpp_2m / karras</b> came out slightly soft/blurry — keep cfg 1.0–1.5 for crisp pixels."},
+      {file:"flux_03_txt2img_widescreen.png",id:"03",approach:"text-to-image (widescreen)",src:null,denoise:1.0,
+       settings:{sampler:"euler",scheduler:"simple",steps:24,cfg:1.5,width:1344,height:768,seed:3003},
+       prompt:"retro 16-bit pixel art side scroller video game scene, wide view, a small robot desk buddy character with a red cap and blue overalls walking across a long green grass platform, two green warp pipes, a red piranha plant with a toothy grin peeking from one pipe, sunny sky with blocky white clouds, yellow sun, flat solid colors, limited vibrant palette, nostalgic platformer aesthetic, crisp clean pixels",
+       note:"Widescreen 1344×768 — good for side-scroller compositions.",gen_s:20},
+      {file:"flux_04_img2img_prompting.png",id:"04",approach:"image-to-image",src:"prompting.png",denoise:0.55,
+       settings:{sampler:"euler",scheduler:"beta",steps:24,cfg:1.0,width:1024,height:1024,seed:4004},
+       prompt:"retro 16-bit pixel art, a friendly robot desk buddy character with a red cap, white visor eyes and blue overalls, standing on green grass next to a green warp pipe, sunny sky, enhanced detail, vibrant colors, crisp pixels.",
+       note:"denoise 0.55 — preserves source layout while enhancing detail.",gen_s:10.7},
+      {file:"flux_05_img2img_down.png",id:"05",approach:"image-to-image",src:"down.png",denoise:0.7,
+       settings:{sampler:"dpmpp_2m_sde",scheduler:"karras",steps:30,cfg:1.5,width:1024,height:1024,seed:5005},
+       prompt:"retro 16-bit pixel art, a red piranha plant with a wide toothy grin emerging from a green warp pipe, green grass, sunny light blue sky with blocky clouds, vibrant colors, enhanced detail, crisp clean pixels.",
+       note:"denoise 0.70 — higher denoise, still tracks the source scene.",gen_s:27.6},
+      {file:"flux_06_denoise_low_idle.png",id:"06",approach:"high-detail / low-noise",src:"idle.png",denoise:0.25,
+       settings:{sampler:"euler",scheduler:"beta",steps:32,cfg:1.0,width:1024,height:1024,seed:6006},
+       prompt:"highly detailed retro 16-bit pixel art landscape, sharp crisp pixels, intricate texture on the grass and dirt ground, vivid saturated colors, professional video game background art, sunny sky, clouds, bushes, signpost.",
+       note:"Low-noise 0.25 refinement — most faithful to the source structure.",gen_s:13.8}
+    ],
+    findings:[
+      "Text-to-image at 1024² with <b>euler / beta, cfg 1.0, 20–32 steps</b> gives the crispest clean pixel-art (flux_01, flux_06) — the recommended Flux baseline.",
+      "Widescreen 1344×768 T2I (flux_03) works well for side-scroller compositions.",
+      "Higher <b>cfg 2.0</b> with dpmpp_2m / karras (flux_02) came out slightly soft/blurry; keep cfg 1.0–1.5 for crisp pixels.",
+      "img2img at denoise 0.55–0.7 (flux_04, flux_05) preserves the source layout while enhancing detail; low-noise 0.25 (flux_06) is most faithful to source structure.",
+      "Flux Dev is <b>guidance-distilled</b>: empty negative prompt + cfg ~1.0 is standard; pushing cfg higher degrades quality rather than adding adherence."
+    ]
+  }
+};
+
+/* map a settings object coming straight from metadata.json into the render shape */
+function normImg(model, raw){
+  const s = raw.settings || {};
+  return {
+    file: raw.file,
+    id: raw.id || raw.file.replace(/[^0-9]/g,"").slice(-2) || raw.file,
+    approach: raw.approach || "—",
+    src: (raw.source && typeof raw.source==="string" && raw.source.length)
+        ? raw.source.replace(/.*[\/\\]/,"")
+        : (Array.isArray(raw.source_files) && raw.source_files.length ? raw.source_files.join(", ") : null),
+    denoise: (s.denoise!=null ? s.denoise : (raw.denoise!=null?raw.denoise:null)),
+    settings:{
+      sampler:s.sampler, scheduler:s.scheduler, steps:s.steps, cfg:s.cfg,
+      width:s.width, height:s.height, seed:s.seed
+    },
+    prompt: raw.prompt || raw.prompt || "",
+    negative: (raw.negative||raw.negative_prompt||""),
+    note: raw.note || "",
+    gen_s: raw.elapsed_s || raw.gen_seconds || null
+  };
+}
+
+/* each image lands in exactly ONE section, by priority: i2i > high-detail > t2i.
+   (avoids an image whose label mentions two techniques, e.g. "high-detail / low-noise (T2I)", being rendered twice) */
+function sectionOf(approach){
+  const a = approach||"";
+  if(/image-to-image/i.test(a)) return "i2i";
+  if(/high-detail|low-noise/i.test(a)) return "hd";
+  return "t2i";
+}
+const APPROACHES = [
+  {key:"t2i", n:"1", title:"Text-to-image", desc:"Fresh generation from prompt only — no source bitmap. Where both models are strongest for this pixel-art style."},
+  {key:"i2i", n:"2", title:"Image-to-image", desc:"Seeded from an existing source bitmap (idle / working / prompting / down). Tests how well each model honors the source vs the prompt."},
+  {key:"hd", n:"3", title:"High-detail / low-noise", desc:"Higher step counts and/or low-denoise refinement passes to push detail while holding composition."}
+];
+
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function res(s){return (s.width&&s.height)?`${s.width}×${s.height}`:"—";}
+function bestSet(model){return new Set(BEST[model].files);}
+
+function cardHTML(model, img){
+  const isBest = bestSet(model).has(img.file);
+  const s = img.settings;
+  const src = img.src ? `<div class="src">from <b>${esc(img.src)}</b>${img.denoise!=null?` · denoise ${img.denoise}`:""}</div>` : "";
+  const note = img.note ? `<div class="note">${img.note}</div>` : "";
+  return `
+  <div class="card${isBest?" best":""}">
+    <div class="ph">
+      ${isBest?`<span class="badge">★ BEST</span>`:""}
+      <img src="${esc(DIRS[model])}/${esc(img.file)}" alt="${esc(img.file)}" loading="lazy"
+           onclick="lb('${esc(DIRS[model])}/${esc(img.file)}','${esc(img.file)}')">
+    </div>
+    <div class="body">
+      <div class="fname"><span><span class="id">#${esc(img.id)} · </span>${esc(img.file.replace(/\.png$/,""))}</span><span class="ap-tag">${esc(img.approach)}</span></div>
+      ${src}
+      <div class="kv">
+        <span class="k">sampler</span><span class="v">${esc(s.sampler)}${s.scheduler?` / ${esc(s.scheduler)}`:""}</span>
+        <span class="k">steps</span><span class="v">${s.steps!=null?esc(s.steps):"—"}</span>
+        <span class="k">cfg</span><span class="v">${s.cfg!=null?esc(s.cfg):"—"}</span>
+        <span class="k">res</span><span class="v">${res(s)}</span>
+        <span class="k">seed</span><span class="v">${s.seed!=null?esc(s.seed):"—"}</span>
+      </div>
+      <div class="prompt" onclick="this.classList.toggle('open')">
+        <div class="ptxt">${esc(img.prompt)}</div>
+        <div class="phint">click to expand</div>
+      </div>
+      ${note}
+    </div>
+  </div>`;
+}
+
+function render(data, sourceLabel){
+  // model summary cards
+  document.getElementById("models").innerHTML = ["qwen","flux"].map(m=>{
+    const b = BEST[m];
+    return `<div class="model ${m}">
+      <div class="mname">${esc(data[m].model)} <span class="mtag">${m==="qwen"?"7 images":"6 images"}</span></div>
+      <div class="msub">${esc(data[m].modelSub)}</div>
+      <div class="bestbox">
+        <div class="bt"><span class="star">★</span>${esc(b.badge)} — best-performing settings</div>
+        <div class="bs">${b.settings}</div>
+        <div class="bn">${esc(b.note)}</div>
+      </div>
+    </div>`;
+  }).join("");
+
+  // approach sections
+  document.getElementById("sections").innerHTML = APPROACHES.map(ap=>{
+    const pick = m => data[m].images.filter(i=>sectionOf(i.approach)===ap.key);
+    const side = m => {
+      const imgs = pick(m);
+      if(!imgs.length) return `<div class="side ${m}"><div class="shead"><span class="sw"></span>${m==="qwen"?"Qwen Image":"Flux Dev"}<span class="cnt">none in this approach</span></div></div>`;
+      return `<div class="side ${m}">
+        <div class="shead"><span class="sw"></span>${m==="qwen"?"Qwen Image":"Flux Dev"}<span class="cnt">${imgs.length} image${imgs.length>1?"s":""}</span></div>
+        <div class="grid">${imgs.map(i=>cardHTML(m,i)).join("")}</div>
+      </div>`;
+    };
+    return `<div class="section">
+      <h2><span class="num">${ap.n}</span>${esc(ap.title)}</h2>
+      <p class="sdesc">${esc(ap.desc)}</p>
+      <div class="pair">${side("qwen")}${side("flux")}</div>
+    </div>`;
+  }).join("");
+
+  // findings
+  document.getElementById("findings").innerHTML = ["qwen","flux"].map(m=>`
+    <div class="fbox">
+      <h3><span class="sw" style="background:var(--${m})"></span>${esc(data[m].model)}</h3>
+      <ul>${data[m].findings.map(f=>`<li>${f}</li>`).join("")}</ul>
+    </div>`).join("");
+
+  setSrc(sourceLabel);
+}
+
+function setSrc(label){
+  const isLive = /live/i.test(label);
+  document.getElementById("src-ind").textContent = label;
+  const badge = document.getElementById("src-badge");
+  badge.textContent = label;
+  badge.className = "src-badge " + (isLive?"live":"embed");
+}
+
+function lb(src,cap){
+  document.getElementById("lb-img").src = src;
+  document.getElementById("lb-cap").innerHTML = `<b>${esc(cap)}</b> — click to close`;
+  document.getElementById("lb").classList.add("on");
+}
+document.addEventListener("keydown",e=>{if(e.key==="Escape")document.getElementById("lb").classList.remove("on");});
+
+/* ---- try to read the live metadata.json (works when served over http); fall back to the embedded snapshot over file:// ---- */
+async function loadLive(model){
+  const j = await (await fetch(META[model],{cache:"no-store"})).json();
+  return {
+    model: j.model?.name || j.model?.base || (model==="qwen"?"Qwen Image":"Flux Dev"),
+    modelSub: (model==="qwen"
+        ? (j.model ? `UNet ${j.model.unet||""} · text ${j.model.text_encoder||""} · VAE ${j.model.vae||""}` : "")
+        : (j.model ? `UNet ${j.model.unet||""} · T5-XXL ${j.model.t5xxl||""} · CLIP-L ${j.model.clip_l||""} · VAE ${j.model.vae||""}` : "")),
+    images: (j.images||[]).map(r=>normImg(model,r)),
+    findings: j.findings || []
+  };
+}
+
+(async function main(){
+  // always render immediately from the snapshot so file:// works with zero delay
+  render(SNAPSHOT, "embedded snapshot (2026-10-25)");
+  // then try to upgrade to live metadata
+  try{
+    const [q,f] = await Promise.all([loadLive("qwen"), loadLive("flux")]);
+    const merged = {
+      qwen:{...SNAPSHOT.qwen, model:q.model, modelSub:q.modelSub, images:q.images, findings:q.findings.length?q.findings:SNAPSHOT.qwen.findings},
+      flux:{...SNAPSHOT.flux, model:f.model, modelSub:f.modelSub, images:f.images, findings:f.findings.length?f.findings:SNAPSHOT.flux.findings}
+    };
+    render(merged, "live · both metadata.json");
+  }catch(e){
+    // file:// (CORS) or missing file — keep the embedded snapshot, just clarify
+    setSrc("embedded snapshot (file:// — live metadata.json unavailable)");
+  }
+})();
+</script>
+</body>
+</html>
